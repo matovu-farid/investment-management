@@ -1,3 +1,4 @@
+import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -49,7 +50,7 @@ function CashRegister() {
     if (!period) return
     try { await loadRange(period) } catch { setRefreshFailed(true); setRegister(null); setError('The change was saved, but the register could not refresh. Reload before making another change.') }
   }
-  function discard(action: () => void) { if (window.confirm('This request may already have been recorded. Check the register before discarding it. Discard the request?')) { try { action() } catch { setError('The pending request could not be discarded.') } } }
+  async function discard(action: () => void) { if (await confirmAction('This request may already have been recorded. Check the register before discarding it. Discard the request?')) { try { action() } catch { setError('The pending request could not be discarded.') } } }
   function prepare(e: React.FormEvent) {
     e.preventDefault(); setError(''); setMessage('')
     if (!entryDate || !/^[1-9][0-9]{0,29}$/.test(amountMinor) || !/^[A-Z]{3}$/.test(currency) || !description.trim()) { setError('Enter a date, description, positive whole amount in minor units and three-letter currency.'); return }

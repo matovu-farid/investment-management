@@ -109,3 +109,10 @@ test('unavailable storage still reports failed authentication without claiming s
  await assert.rejects(signOutWithPendingProtection(()=>{throw new Error('blocked')},'u',value=>{reason=value;return true},async()=>({error:{message:'network'}})),/could not sign out/i)
  assert.equal(reason,'unavailable')
 })
+
+test('sign-out waits for asynchronous confirmation and respects cancellation', async () => {
+ const { signOutWithPendingProtection } = await import('../../src/lib/pending-requests/signout.ts')
+ let calls=0
+ const result=await signOutWithPendingProtection(()=>{throw new Error('unavailable')},'u',async()=>false,async()=>{calls++;return {error:null}})
+ assert.deepEqual(result,{signedOut:false,cleanupFailed:false});assert.equal(calls,0)
+})

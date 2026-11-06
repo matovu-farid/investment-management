@@ -1,3 +1,4 @@
+import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -34,7 +35,7 @@ function LoanBalances() {
   const locked = busy || refreshFailed || !publishing.ready || !withdrawing.ready || !observedPublishing.ready || !!observedPublishing.pending || !!observedPublishing.storageError || !!publishing.pending || !!withdrawing.pending || !!publishing.storageError || !!withdrawing.storageError
   const loan = data?.loans.find(item => item.id === loanId)
   async function refresh() { try { await router.invalidate() } catch { setRefreshFailed(true); setError('Saved, but the register could not refresh. Reload before continuing.') } }
-  function discard(action: () => void) { if (window.confirm('This request may already have been recorded. Check the publication history before discarding it. Discard the request?')) { try { action() } catch { setError('Could not discard the pending request.') } } }
+  async function discard(action: () => void) { if (await confirmAction('This request may already have been recorded. Check the publication history before discarding it. Discard the request?')) { try { action() } catch { setError('Could not discard the pending request.') } } }
   function prepare(event: React.FormEvent) {
     event.preventDefault(); setError(''); setMessage('')
     if (!loan || !observedDate || !/^(0|[1-9][0-9]{0,29})$/.test(amountMinor) || !basis.trim() || !source.trim()) { setError('Select a loan and enter a date, whole-number amount, basis and source.'); return }
@@ -92,7 +93,7 @@ function LoanBalances() {
           <Button disabled={locked || !loan}>Review balance</Button>
         </form>}
       </section><section style={panel}><h2>Publication history</h2><PendingRequestNotice title="Withdrawal" pending={withdrawing.pending} storageError={withdrawing.storageError} disabled={busy || refreshFailed} onRetry={() => withdrawing.pending && void withdraw(withdrawing.pending, false)} onDiscard={() => discard(withdrawing.discard)} />
-        {data.publications.length === 0 ? <p>No loan balances have been published.</p> : <ul>{data.publications.map(p => <li key={p.id}>{p.memberName} · {p.memberNumber} · account {p.userName} ({p.userEmail}) · loan {p.loanId} · reported {p.observedDate}: {p.currency} {number(p.amountMinor)} minor units · basis: {p.basis} · source: {p.source} · {p.observationId ? `source observation ${p.observationId} · ` : 'manually entered · '}published {p.publishedAt} UTC · {p.withdrawnAt ? `withdrawn ${p.withdrawnAt} UTC` : p.active ? 'visible to the reviewed linked account' : 'not currently visible'}{!p.withdrawnAt && <Button type="button" disabled={locked} onClick={() => { if (window.confirm(`Withdraw the reported balance for ${p.memberName}, loan ${p.loanId}?`)) void withdraw({ publicationId: p.id, idempotencyKey: crypto.randomUUID() }, true) }}>Withdraw</Button>}</li>)}</ul>}
+        {data.publications.length === 0 ? <p>No loan balances have been published.</p> : <ul>{data.publications.map(p => <li key={p.id}>{p.memberName} · {p.memberNumber} · account {p.userName} ({p.userEmail}) · loan {p.loanId} · reported {p.observedDate}: {p.currency} {number(p.amountMinor)} minor units · basis: {p.basis} · source: {p.source} · {p.observationId ? `source observation ${p.observationId} · ` : 'manually entered · '}published {p.publishedAt} UTC · {p.withdrawnAt ? `withdrawn ${p.withdrawnAt} UTC` : p.active ? 'visible to the reviewed linked account' : 'not currently visible'}{!p.withdrawnAt && <Button type="button" disabled={locked} onClick={async () => { if (await confirmAction(`Withdraw the reported balance for ${p.memberName}, loan ${p.loanId}?`)) void withdraw({ publicationId: p.id, idempotencyKey: crypto.randomUUID() }, true) }}>Withdraw</Button>}</li>)}</ul>}
       </section>
     </>}
   </main></div>

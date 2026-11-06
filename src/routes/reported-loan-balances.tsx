@@ -1,3 +1,4 @@
+import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -36,7 +37,7 @@ function ReportedLoanBalances() {
   const selectedLoan = data?.loans.find(l => l.id === loanId)
   const selectedVoid = data?.observations.find(o => o.id === observationId)
   async function refresh() { try { await router.invalidate() } catch { setRefreshFailed(true); setError('Saved, but the register could not refresh. Reload before making another change.') } }
-  function discard(action: () => void) { if (window.confirm('This request may already have been recorded. Check the register before discarding it. Discard the request?')) { try { action() } catch { setError('The pending request could not be discarded.') } } }
+  async function discard(action: () => void) { if (await confirmAction('This request may already have been recorded. Check the register before discarding it. Discard the request?')) { try { action() } catch { setError('The pending request could not be discarded.') } } }
   function prepare(e: React.FormEvent) {
     e.preventDefault(); setError(''); setMessage('')
     if (!selectedLoan || !observedDate || !/^(0|[1-9][0-9]{0,29})$/.test(amountMinor) || !basis.trim() || !source.trim()) { setError('Select a loan and enter a date, non-negative whole amount, basis and source.'); return }

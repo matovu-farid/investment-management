@@ -1,3 +1,4 @@
+import { confirmAction } from '#/components/confirmation-host'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { getSession } from '#/lib/auth.functions'
@@ -51,7 +52,7 @@ function Invitations() {
     } finally { setBusy(false) }
   }
   async function revoke(id: string) {
-    if (busy || !window.confirm('Revoke this invitation? Its link will no longer work.')) return
+    if (busy || !await confirmAction('Revoke this invitation? Its link will no longer work.')) return
     setBusy(true); setError(''); setMessage('')
     try {
       await revokeInvitationFn({ data: { id } })

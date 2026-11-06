@@ -1,3 +1,4 @@
+import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useId, useState } from 'react'
@@ -51,7 +52,7 @@ function InvestmentRegister() {
   const [investmentId, setInvestmentId] = useState(''); const [valuationDate, setValuationDate] = useState(''); const [amountMinor, setAmountMinor] = useState(''); const [basis, setBasis] = useState(''); const [source, setSource] = useState('')
   const [transactionInvestmentId, setTransactionInvestmentId] = useState(''); const [transactionDate, setTransactionDate] = useState(''); const [transactionType, setTransactionType] = useState(''); const [transactionAmount, setTransactionAmount] = useState(''); const [transactionReference, setTransactionReference] = useState(''); const [transactionNotes, setTransactionNotes] = useState('')
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState('')
-  function discardPending(discard:()=>void){if(window.confirm('This request may already have been recorded. Check the register before discarding it. Discard the pending request?')){try{discard()}catch{setError('Could not discard the pending request in this tab.')}}}
+  async function discardPending(discard:()=>void){if(await confirmAction('This request may already have been recorded. Check the register before discarding it. Discard the pending request?')){try{discard()}catch{setError('Could not discard the pending request in this tab.')}}}
  async function refreshAfterSave(confirmed:string){setMessage(confirmed);try{await router.invalidate()}catch{setMessage(`${confirmed} The list could not be refreshed; reload the page to see the saved record.`)}}
   async function sendInvestment(payload:InvestmentRequest,isNew:boolean){setBusy(true);setMessage('');setError('');try{await investmentPending.send(payload,v=>createInvestmentFn({data:{name:v.name,assetClass:v.assetClass,currency:v.currency,requestKey:v.idempotencyKey}}),isNew);setName('');setAssetClass('');await refreshAfterSave('Investment added.')}catch{setError('Investment was not confirmed. Check the register, then retry the pending request unchanged if the result is uncertain.')}finally{setBusy(false)}}
   async function saveInvestment(e:React.FormEvent<HTMLFormElement>){e.preventDefault();await sendInvestment({idempotencyKey:crypto.randomUUID(),name,assetClass,currency},true)}

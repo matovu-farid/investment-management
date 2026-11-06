@@ -1,3 +1,4 @@
+import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -48,7 +49,7 @@ function CashPosting() {
   const correctionEntry = data?.entries.find(item => item.id === predecessor?.entryId)
   const correctionAccounts = data?.accounts.filter(a => a.currency === correctionEntry?.currency) ?? []
   const correctionToReverse = data?.versions.find(v => v.journalId === correctionJournal && v.isCorrection && !v.reversalId && !v.sourceVoidedAt)
-  function discard(discardAction: () => void) { if (window.confirm('This request may already have been posted. Check the ledger before discarding it. Discard the retained request?')) { try { discardAction() } catch { setError('Could not discard the retained request.') } } }
+  async function discard(discardAction: () => void) { if (await confirmAction('This request may already have been posted. Check the ledger before discarding it. Discard the retained request?')) { try { discardAction() } catch { setError('Could not discard the retained request.') } } }
   async function refresh() { try { await router.invalidate() } catch { setRefreshFailed(true); setError('The journal may have changed, but this page could not refresh. Reload and check the ledger before continuing.') } }
   function prepare(e: React.FormEvent) {
     e.preventDefault(); setError(''); setMessage('')

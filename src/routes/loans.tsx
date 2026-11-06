@@ -1,3 +1,4 @@
+import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -123,8 +124,8 @@ function LendingPage() {
     if (!loan) { setRepaymentError('Select an active loan before recording a repayment.'); return }
     setRepaymentReview({ request: {idempotencyKey:crypto.randomUUID(),loanId:repaymentLoanId,amountMinor:Number(repaymentAmount),paymentDate:repaymentDate,reference:repaymentReference.trim(),notes:repaymentNotes.trim()}, memberName: loan.memberName ?? 'Member unavailable', currency: loan.currency, disbursementDate: loan.disbursementDate })
   }
-  function discard(p: {discard:()=>void}, reportError = setError) {
-    if (!window.confirm('Discard this pending request? It may already have been saved. Check the register first; a new submission can create a duplicate.')) return
+  async function discard(p: {discard:()=>void}, reportError = setError) {
+    if (!await confirmAction('Discard this pending request? It may already have been saved. Check the register first; a new submission can create a duplicate.')) return
     try { p.discard() } catch { reportError('Could not discard the pending request. Check browser storage and the register.') }
   }
   return <div className="app"><header><Link to="/" className="brand" style={{ color: 'inherit', textDecoration: 'none' }}><span className="brand-mark">R</span><span>RNIG <small>INVESTMENT GROUP</small></span></Link><Link to="/" className="quiet">Back to overview</Link></header><main className="dashboard lending"><p className="eyebrow">KANUNGU LOAN FUND</p><h1>Loans &amp; credit bookings</h1><p className="lead">Record individual loans and requests awaiting funding.</p>

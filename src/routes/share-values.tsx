@@ -1,3 +1,4 @@
+import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -32,7 +33,7 @@ function ShareValues() {
   const locked = busy || refreshFailed || !!publishing.pending || !!withdrawing.pending || !publishing.ready || !withdrawing.ready || !!publishing.storageError || !!withdrawing.storageError
   const selected = data?.holdings.find(h => h.publicationId === holdingId)
   async function refresh() { try { await router.invalidate() } catch { setRefreshFailed(true); setError('Saved, but the register could not refresh. Reload before making another change.') } }
-  function discard(action: () => void) { if (window.confirm('This request may already have been recorded. Check the history before discarding it. Discard the request?')) { try { action() } catch { setError('The pending request could not be discarded.') } } }
+  async function discard(action: () => void) { if (await confirmAction('This request may already have been recorded. Check the history before discarding it. Discard the request?')) { try { action() } catch { setError('The pending request could not be discarded.') } } }
   async function publish(v: PublishRequest, isNew: boolean) {
     setBusy(true); setError(''); setMessage('')
     try {
@@ -70,7 +71,7 @@ function ShareValues() {
         </form>
       </CardContent></Card>
       <Card className="mt-6"><CardHeader><CardTitle><h2>Publication history</h2></CardTitle><CardDescription>Previously published values and their current status.</CardDescription></CardHeader><CardContent><PendingRequestNotice title="Withdrawal" pending={withdrawing.pending} storageError={withdrawing.storageError} disabled={busy || refreshFailed} onRetry={() => withdrawing.pending && void withdraw(withdrawing.pending, false)} onDiscard={() => discard(withdrawing.discard)} />
-        {data.publications.length === 0 ? <p>No indicative values have been published.</p> : <div className="flex flex-col gap-4">{data.publications.map(p => <Card key={p.id}><CardHeader><CardTitle><h3>Publication {p.id}</h3></CardTitle><CardDescription>Holding {p.holdingPublicationId} · published {p.publishedAt}</CardDescription></CardHeader><CardContent className="flex flex-col gap-3"><p>Observed {p.observedDate} · {number(p.shares)} shares · holding source: {p.holdingSource}</p><p>Price date {p.priceDate} · {number(p.priceMinor)} {p.currency} minor units per share · basis: {p.basis} · price source: {p.priceSource}</p><p>Indicative total {number(p.valueMinor)} {p.currency} minor units</p><div><Badge variant="secondary">{p.withdrawnAt ? `withdrawn ${p.withdrawnAt}` : p.active ? 'active' : 'inactive (holding no longer published)'}</Badge></div>{!p.withdrawnAt && <div><Button type="button" variant="outline" disabled={locked} onClick={() => { if (window.confirm(`Withdraw indicative value publication ${p.id}?`)) void withdraw({ publicationId: p.id, idempotencyKey: crypto.randomUUID() }, true) }}>Withdraw</Button></div>}</CardContent></Card>)}</div>}
+        {data.publications.length === 0 ? <p>No indicative values have been published.</p> : <div className="flex flex-col gap-4">{data.publications.map(p => <Card key={p.id}><CardHeader><CardTitle><h3>Publication {p.id}</h3></CardTitle><CardDescription>Holding {p.holdingPublicationId} · published {p.publishedAt}</CardDescription></CardHeader><CardContent className="flex flex-col gap-3"><p>Observed {p.observedDate} · {number(p.shares)} shares · holding source: {p.holdingSource}</p><p>Price date {p.priceDate} · {number(p.priceMinor)} {p.currency} minor units per share · basis: {p.basis} · price source: {p.priceSource}</p><p>Indicative total {number(p.valueMinor)} {p.currency} minor units</p><div><Badge variant="secondary">{p.withdrawnAt ? `withdrawn ${p.withdrawnAt}` : p.active ? 'active' : 'inactive (holding no longer published)'}</Badge></div>{!p.withdrawnAt && <div><Button type="button" variant="outline" disabled={locked} onClick={async () => { if (await confirmAction(`Withdraw indicative value publication ${p.id}?`)) void withdraw({ publicationId: p.id, idempotencyKey: crypto.randomUUID() }, true) }}>Withdraw</Button></div>}</CardContent></Card>)}</div>}
       </CardContent></Card>
     </>}
   </main></div>

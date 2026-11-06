@@ -12,12 +12,12 @@ function keysForUser(storage: StorageLike, userId: string): string[] {
 export async function signOutWithPendingProtection(
   getStorage: () => StorageLike,
   userId: string,
-  confirmLoss: (reason: 'pending' | 'unavailable') => boolean,
+  confirmLoss: (reason: 'pending' | 'unavailable') => boolean | Promise<boolean>,
   signOut: () => Promise<{ error: unknown }>,
 ): Promise<SignOutResult> {
   let pending: string[] | null = null
   try { pending = keysForUser(getStorage(), userId) } catch { /* Cannot determine whether requests remain. */ }
-  if ((pending === null || pending.length > 0) && !confirmLoss(pending === null ? 'unavailable' : 'pending')) {
+  if ((pending === null || pending.length > 0) && !(await confirmLoss(pending === null ? 'unavailable' : 'pending'))) {
     return { signedOut: false, cleanupFailed: false }
   }
   const result = await signOut()

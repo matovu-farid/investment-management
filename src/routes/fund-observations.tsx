@@ -1,3 +1,4 @@
+import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -35,7 +36,7 @@ function FundObservations() {
   const locked = busy || refreshFailed || !recording.ready || !voiding.ready || !!recording.pending || !!voiding.pending || !!recording.storageError || !!voiding.storageError
   const selectedVoid = data?.observations.find(o => o.id === voidId)
   async function refresh() { try { await router.invalidate() } catch { setRefreshFailed(true); setError('Saved, but the register could not refresh. Reload before making another change.') } }
-  function discard(action: () => void) { if (window.confirm('This request may already have been recorded. Check the register before discarding it. Discard the request?')) { try { action() } catch { setError('The pending request could not be discarded.') } } }
+  async function discard(action: () => void) { if (await confirmAction('This request may already have been recorded. Check the register before discarding it. Discard the request?')) { try { action() } catch { setError('The pending request could not be discarded.') } } }
   function prepare(e: React.FormEvent) {
     e.preventDefault(); setError(''); setMessage('')
     if (!observedDate || !/^(0|[1-9][0-9]{0,29})$/.test(amountMinor) || !/^[A-Z]{3}$/.test(currency) || !basis.trim() || !source.trim()) { setError('Complete every field with a non-negative whole amount and a three-letter currency.'); return }

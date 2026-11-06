@@ -1,3 +1,4 @@
+import { confirmAction } from '#/components/confirmation-host'
 import { formatJournalDescription } from '#/lib/journal-description'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
@@ -34,7 +35,7 @@ function Accounting(){
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('')
  function changeLine(index:number,patch:Partial<Line>){setLines(previous=>previous.map((line,i)=>i===index?{...line,...patch}:line))}
  const unavailable = <T extends {idempotencyKey:string}>(p:ReturnType<typeof usePendingRequest<T>>) => !p.ready || !!p.storageError || !!p.pending
- function discard(p:{discard:()=>void}) { if (!window.confirm('Discard this pending request? It may already have been saved. Check the ledger first; a new submission can create a duplicate.')) return; try {p.discard()} catch {setError('Could not discard the pending request. Check browser storage and the ledger.')} }
+ async function discard(p:{discard:()=>void}) { if (!await confirmAction('Discard this pending request? It may already have been saved. Check the ledger first; a new submission can create a duplicate.')) return; try {p.discard()} catch {setError('Could not discard the pending request. Check browser storage and the ledger.')} }
  async function recordAccount(payload:AccountRequest,isNew:boolean) {
   setBusy(true);setError('');setMessage('')
   try {await accountPending.send(payload,data=>createAccountFn({data}),isNew);setCode('');setName('');setMessage('Account added.');try{await router.invalidate()}catch{setMessage('Account saved. Refresh to update the ledger.')}}

@@ -1,3 +1,4 @@
+import { confirmAction, showNotice } from '#/components/confirmation-host'
 import { createFileRoute, redirect, Link } from '@tanstack/react-router'
 import { getSession } from '#/lib/auth.functions'
 import { authClient } from '#/lib/auth-client'
@@ -37,9 +38,9 @@ function Dashboard() {
   async function signOut() {
     setSigningOut(true); setSignOutError('')
     try {
-      const result = await signOutWithPendingProtection(() => window.sessionStorage, user.id, reason => window.confirm(reason === 'unavailable' ? 'This browser cannot check pending requests. Signing out may leave request details on this device, and a new submission could create a duplicate. Sign out anyway?' : 'This tab has requests whose outcome is uncertain. Signing out removes their saved details from this tab. Check the registers first; a new submission could create a duplicate. Sign out anyway?'), () => authClient.signOut())
+      const result = await signOutWithPendingProtection(() => window.sessionStorage, user.id, reason => confirmAction(reason === 'unavailable' ? 'This browser cannot check pending requests. Signing out may leave request details on this device, and a new submission could create a duplicate. Sign out anyway?' : 'This tab has requests whose outcome is uncertain. Signing out removes their saved details from this tab. Check the registers first; a new submission could create a duplicate. Sign out anyway?'), () => authClient.signOut())
       if (result.signedOut) {
-        try { if (result.cleanupFailed) window.alert('You are signed out, but this browser could not clear pending request details from this tab. Close the tab and check the registers before resubmitting.') }
+        try { if (result.cleanupFailed) await showNotice('You are signed out, but this browser could not clear pending request details from this tab. Close the tab and check the registers before resubmitting.') }
         finally { window.location.href = '/login' }
       }
     } catch { setSignOutError('Sign-out could not be confirmed. Check your connection and try again.') }
