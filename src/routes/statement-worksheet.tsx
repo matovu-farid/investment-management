@@ -1,3 +1,4 @@
+import { Alert, AlertDescription } from '#/components/ui/alert'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -49,7 +50,7 @@ function StatementWorksheet() {
   return <div className="app"><header><Link to="/" className="brand" style={{ color: 'inherit', textDecoration: 'none' }}><span className="brand-mark">R</span><span>RNIG <small>INVESTMENT GROUP</small></span></Link><Link to="/" className="quiet">Back to overview</Link></header><main className="dashboard">
     <p className="eyebrow">ADMINISTRATION</p><h1>Financial statement working paper</h1>
     <p>Choose which ledger accounts belong to each line and how their debits and credits are presented. This is a user-mapped working paper, not an approved financial statement. No account classification, accounting policy or currency conversion is inferred.</p>
-    {!available ? <p role="alert">Accounts are unavailable or access could not be confirmed. Reload and try again.</p> : <form onSubmit={generate}>
+    {!available ? <Alert variant="destructive" role="alert"><AlertDescription>Accounts are unavailable or access could not be confirmed. Reload and try again.</AlertDescription></Alert> : <form onSubmit={generate}>
       <section style={panel}><h2>Period and mappings</h2><p>Position includes posted entries through the as-of date. Period activity includes posted entries on and between the selected dates. Reversals appear by their effective dates.</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'end' }}>
           <label>Working paper <select value={mode} disabled={busy} onChange={e => { setMode(e.target.value as 'position' | 'activity'); setResult(null); setError('') }}><option value="position">Position as of a date</option><option value="activity">Activity for a period</option></select></label>
@@ -61,7 +62,7 @@ function StatementWorksheet() {
         <button disabled={busy || !accounts.length}>{busy ? 'Generating…' : 'Review working paper'}</button>
       </section>
     </form>}
-    {error && <p role="alert">{error}</p>}
+    {error && <Alert variant="destructive" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}
     {result && <section style={panel} aria-labelledby="worksheet-result"><h2 id="worksheet-result">Working paper review</h2><p>{result.mode === 'position' ? `Position through ${result.endDate}` : `Activity from ${result.startDate} through ${result.endDate}`}, inclusive · snapshot {result.snapshotAt} UTC. The report reflects records available at capture; later backdated entries may change a new report. Amounts are integer minor units in the stated currency. Review the mappings and unmapped accounts before use.</p><button type="button" onClick={download}>Download working paper CSV</button><p>Import CSV columns as text to preserve account codes and large amounts. Protective apostrophes may appear.</p>
       <h3>Mapped lines</h3>{!result.lines.length ? <p>No accounts were mapped.</p> : <div style={{ overflowX: 'auto' }}><table><thead><tr>{['Line', 'Currency', 'Amount (minor units)'].map(h => <th key={h} scope="col" style={cell}>{h}</th>)}</tr></thead><tbody>{result.lines.map((line, i) => <tr key={`${line.currency}-${line.lineName}-${i}`}><td style={cell}>{line.lineName}</td><td style={cell}>{line.currency}</td><td style={cell}>{amount(line.valueMinor)}</td></tr>)}</tbody></table></div>}
       <h3>Account review</h3><div style={{ overflowX: 'auto' }}><table><thead><tr>{['Account', 'Currency', 'Debits', 'Credits', 'Line', 'Presentation', 'Line contribution'].map(h => <th key={h} scope="col" style={cell}>{h}</th>)}</tr></thead><tbody>{result.accounts.map(a => <tr key={a.accountId}><td style={cell}>{a.code} · {a.name}</td><td style={cell}>{a.currency}</td><td style={cell}>{amount(a.debits)}</td><td style={cell}>{amount(a.credits)}</td><td style={cell}>{a.lineName ?? 'Unmapped'}</td><td style={cell}>{a.polarity === 'debit-minus-credit' ? 'Debits less credits' : a.polarity === 'credit-minus-debit' ? 'Credits less debits' : '—'}</td><td style={cell}>{a.valueMinor === null ? '—' : amount(a.valueMinor)}</td></tr>)}</tbody></table></div>

@@ -1,3 +1,4 @@
+import { Alert, AlertDescription } from '#/components/ui/alert'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { getSession } from '#/lib/auth.functions'
@@ -52,8 +53,8 @@ function InvestmentVoid() {
     <p className="eyebrow">ADMINISTRATION</p><h1>Void an erroneous investment record</h1>
     <p>Mark an incorrect valuation or transaction as void while retaining its audit history. This action cannot be undone and does not reverse an accounting entry or settlement.</p>
     <p>Withdraw any active member publication of a valuation before voiding it. The system checks the publication status when you confirm.</p>
-    {!data ? <p role="alert">The investment register is unavailable or access could not be confirmed.</p> : <>
-      {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
+    {!data ? <Alert variant="destructive" role="alert"><AlertDescription>The investment register is unavailable or access could not be confirmed.</AlertDescription></Alert> : <>
+      {error && <Alert variant="destructive" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}{message && <p role="status">{message}</p>}
       <PendingRequestNotice title="Investment record void" pending={pending.pending} storageError={pending.storageError} disabled={busy || refreshFailed} onRetry={() => { if (pending.pending) void send(pending.pending, false) }} onDiscard={() => setDiscardReview(true)} />
       {discardReview && <section style={panel} aria-label="Confirm discarding request"><p>The request may already have been recorded. Check the void history before discarding it.</p><button type="button" disabled={busy} onClick={discard}>Discard request</button>{' '}<button type="button" disabled={busy} onClick={() => setDiscardReview(false)}>Keep request</button></section>}
       <section style={panel}><h2>Review a record</h2>{review ? <div role="region" aria-label="Confirm investment record void"><p><strong>{description(review.sourceKind, review.sourceId)}</strong></p><p>Reason: {review.reason}</p><p>Confirm this record is erroneous. This cannot be undone.</p><button type="button" disabled={locked} onClick={() => void send(review, true)}>{busy ? 'Saving…' : 'Confirm void'}</button>{' '}<button type="button" disabled={busy} onClick={() => setReview(null)}>Edit</button></div> : <form onSubmit={prepare} style={{ display: 'grid', gap: 12, maxWidth: 680 }}>

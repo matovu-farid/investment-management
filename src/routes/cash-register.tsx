@@ -1,3 +1,4 @@
+import { Alert, AlertDescription } from '#/components/ui/alert'
 import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
@@ -80,7 +81,7 @@ function CashRegister() {
   return <div className="app cash-register"><header className="cash-screen"><Link to="/" className="brand" style={{ color: 'inherit', textDecoration: 'none' }}><span className="brand-mark">R</span><span>RNIG <small>INVESTMENT GROUP</small></span></Link><Link to="/" className="quiet">Back to overview</Link></header><main className="dashboard">
     <p className="eyebrow">ADMINISTRATION</p><h1>Other cash receipts and payments</h1><p><Link to="/cash-posting">Post recorded cash activity to the ledger →</Link></p>
     <p>Record ordinary cash receipts and payments that are not already recorded as investment or loan transactions. These are entered facts; they do not post to the ledger or verify cash movement. Do not add this register to other reports without checking for overlap.</p>
-    {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
+    {error && <Alert variant="destructive" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}{message && <p role="status">{message}</p>}
     <div className="cash-screen"><PendingRequestNotice title="Cash record" pending={recording.pending} storageError={recording.storageError} disabled={busy || refreshFailed} onRetry={() => recording.pending && void record(recording.pending, false)} onDiscard={() => discard(recording.discard)} />
     <PendingRequestNotice title="Cash record void" pending={voiding.pending} storageError={voiding.storageError} disabled={busy || refreshFailed} onRetry={() => voiding.pending && void voidRecord(voiding.pending, false)} onDiscard={() => discard(voiding.discard)} />
     <Card className="cash-panel"><CardHeader><CardTitle role="heading" aria-level={2}>Record a receipt or payment</CardTitle></CardHeader><CardContent>{review ? <div aria-label="Review cash record"><h3>Review the record</h3><p>{review.entryDate} · {review.direction} · {review.currency} {amount(review.amountMinor)} minor units</p><p>Counterparty: {review.counterparty || 'Not recorded'} · Reference: {review.reference || 'Not recorded'}</p><p>Description: {review.description}</p><Button type="button" disabled={locked} onClick={() => void record(review, true)}>{busy ? 'Saving…' : 'Confirm record'}</Button>{' '}<Button type="button" disabled={busy} onClick={() => setReview(null)}>Edit</Button></div> : <form onSubmit={prepare} style={{ maxWidth: 680 }}><FieldGroup>

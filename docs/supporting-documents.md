@@ -1,0 +1,9 @@
+# Supporting documents
+
+The `/documents` administrator register stores PDF source documents in the private `rnig-investments-documents` R2 bucket bound as `RNIG_DOCUMENTS`. There is no public R2 domain and no D1 migration for this feature: the file and its descriptive metadata are kept together as one R2 object.
+
+Every list, upload, and download request checks the signed-in user's current administrator role in D1. Downloads are forced attachments with private, no-store headers. Uploads accept PDFs up to 5 MiB and are checked for the PDF signature; a matching signature does not certify that a document is safe or well formed. Stored documents are not published to members or treated as approved policy. Upload request identifiers prevent an unchanged retry from creating a second object. The browser retains a failed request only while the page remains open; check the register before submitting it again after leaving the page.
+
+Listing uses R2 cursors and loads up to 100 objects per page in object-key order. There is no edit or delete action; incorrect source documents must currently be superseded by another entry, not silently overwritten. Back up the bucket separately from D1 and restrict access to the bucket and Cloudflare account, since application permissions do not constrain direct Cloudflare access.
+
+The service tests run under `tests/documents/*.test.ts`. A local test on 7 November 2026 uploaded a synthetic PDF, listed and downloaded it with matching SHA-256, and confirmed a member account could not access the register. The deployed administrator register loaded an empty bucket on 7 November; a production upload and object recovery have not been independently validated.

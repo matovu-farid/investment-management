@@ -1,3 +1,4 @@
+import { Alert, AlertDescription } from '#/components/ui/alert'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { getSession } from '#/lib/auth.functions'
@@ -50,14 +51,14 @@ function TradeVoid() {
     <p className="eyebrow">ADMINISTRATION</p><h1>Void an incorrect trade</h1>
     <p>Mark an erroneous trade fact as void while retaining its audit history. This does not transfer shares, reverse payment or change ownership.</p>
     <p>Withdraw an active member publication and revoke any active reconciliation before voiding its trade. Previously saved board drafts remain unchanged.</p>
-    {!data ? <p role="alert">The trade register is unavailable or access could not be confirmed.</p> : <>
-      {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
+    {!data ? <Alert variant="destructive" role="alert"><AlertDescription>The trade register is unavailable or access could not be confirmed.</AlertDescription></Alert> : <>
+      {error && <Alert variant="destructive" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}{message && <p role="status">{message}</p>}
       <PendingRequestNotice title="Trade void" pending={pending.pending} storageError={pending.storageError} disabled={busy || refreshFailed} onRetry={() => { if (pending.pending) void send(pending.pending, false) }} onDiscard={() => setDiscardReview(true)} />
       {discardReview && <section style={panel} aria-label="Confirm discarding request"><p>The request may already have been recorded. Check the void history before discarding it.</p><button type="button" disabled={busy} onClick={discard}>Discard request</button>{' '}<button type="button" disabled={busy} onClick={() => setDiscardReview(false)}>Keep request</button></section>}
       <section style={panel}><h2>Review a trade</h2>{review ? <div role="region" aria-label="Confirm trade void"><p><strong>{description(review.tradeId)}</strong></p><p>Reason: {review.reason}</p><p>Confirm this recorded trade is erroneous. This cannot be undone.</p><button type="button" disabled={locked} onClick={() => void send(review, true)}>{busy ? 'Saving…' : 'Confirm void'}</button>{' '}<button type="button" disabled={busy} onClick={() => setReview(null)}>Edit</button></div> : <form onSubmit={prepare} style={{ display: 'grid', gap: 12, maxWidth: 720 }}>
         <label>Trade <select required value={tradeId} disabled={locked} onChange={e => setTradeId(e.target.value)}><option value="">Select a recorded trade</option>{trades.filter(t => !t.voidedAt).map(t => <option key={t.id} value={t.id}>{description(t.id)}</option>)}</select></label>
-        {activeReconciliation && <p role="alert">This trade is linked to share events. <Link to="/trade-reconciliation">Revoke the active reconciliation</Link> before voiding it, then reload this page.</p>}
-        {selected?.activePublicationId && <p role="alert">This trade is currently published. <Link to="/trade-publications">Withdraw its publication</Link> before voiding it, then reload this page.</p>}
+        {activeReconciliation && <Alert variant="destructive" role="alert"><AlertDescription>This trade is linked to share events. <Link to="/trade-reconciliation">Revoke the active reconciliation</Link> before voiding it, then reload this page.</AlertDescription></Alert>}
+        {selected?.activePublicationId && <Alert variant="destructive" role="alert"><AlertDescription>This trade is currently published. <Link to="/trade-publications">Withdraw its publication</Link> before voiding it, then reload this page.</AlertDescription></Alert>}
         <label>Reason <textarea required maxLength={450} value={reason} disabled={locked} onChange={e => setReason(e.target.value)} /></label><button disabled={locked || !selected || !!selected.activePublicationId || !!activeReconciliation}>Review void</button>
       </form>}</section>
       <section style={panel}><h2>Voided trades</h2>{!trades.some(t => t.voidedAt) ? <p>No trades have been voided.</p> : <ul>{trades.filter(t => t.voidedAt).map(t => <li key={t.id}>{description(t.id)} · voided {t.voidedAt} UTC · {t.voidReason}</li>)}</ul>}</section>

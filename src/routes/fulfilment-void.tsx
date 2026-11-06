@@ -1,3 +1,4 @@
+import { Alert, AlertDescription } from '#/components/ui/alert'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { getSession } from '#/lib/auth.functions'
@@ -43,8 +44,8 @@ function FulfilmentVoid() {
   return <div className="app"><header><Link to="/" className="brand" style={{ color: 'inherit', textDecoration: 'none' }}><span className="brand-mark">R</span><span>RNIG <small>INVESTMENT GROUP</small></span></Link><Link to="/loans" className="quiet">Back to loans</Link></header><main className="dashboard">
     <p className="eyebrow">ADMINISTRATION</p><h1>Void an erroneous booking fulfilment</h1>
     <p>Mark an incorrect fulfilment as void while retaining its audit history. This action cannot be undone. It updates recorded fulfilled and remaining amounts; it does not reverse a loan or accounting entry.</p>
-    {!data ? <p role="alert">The lending register is unavailable or access could not be confirmed.</p> : <>
-      {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
+    {!data ? <Alert variant="destructive" role="alert"><AlertDescription>The lending register is unavailable or access could not be confirmed.</AlertDescription></Alert> : <>
+      {error && <Alert variant="destructive" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}{message && <p role="status">{message}</p>}
       <PendingRequestNotice title="Fulfilment void" pending={pending.pending} storageError={pending.storageError} disabled={busy} onRetry={() => { if (pending.pending) void send(pending.pending, false) }} onDiscard={() => setDiscardReview(true)} />
       {discardReview && <section style={panel} aria-label="Confirm discarding request"><p>The request may already have been recorded. Check the void history before discarding it.</p><button type="button" disabled={busy} onClick={discard}>Discard request</button>{' '}<button type="button" disabled={busy} onClick={() => setDiscardReview(false)}>Keep request</button></section>}
       <section style={panel}><h2>Review a fulfilment</h2>{review ? <div role="region" aria-label="Confirm fulfilment void"><p><strong>{description(review.fulfilmentId)}</strong></p><p>Reason: {review.reason}</p><p>Confirm this fulfilment is erroneous. This cannot be undone.</p><button type="button" disabled={busy || !pending.ready || !!pending.pending || !!pending.storageError} onClick={() => void send(review, true)}>{busy ? 'Saving…' : 'Confirm void'}</button>{' '}<button type="button" disabled={busy} onClick={() => setReview(null)}>Cancel</button></div> : <form onSubmit={prepare} style={{ display: 'grid', gap: 12, maxWidth: 680 }}>

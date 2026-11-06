@@ -26,6 +26,8 @@ import { Route as CashPostingRouteImport } from './routes/cash-posting'
 import { Route as CashRegisterRouteImport } from './routes/cash-register'
 import { Route as CollateralRouteImport } from './routes/collateral'
 import { Route as CreditReviewRouteImport } from './routes/credit-review'
+import { Route as DocumentsRouteImport } from './routes/documents'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FulfilmentVoidRouteImport } from './routes/fulfilment-void'
 import { Route as FundObservationsRouteImport } from './routes/fund-observations'
 import { Route as GroupBooksRouteImport } from './routes/group-books'
@@ -65,6 +67,7 @@ import { Route as RepaymentPostingRouteImport } from './routes/repayment-posting
 import { Route as ReportedLoanBalanceImportRouteImport } from './routes/reported-loan-balance-import'
 import { Route as ReportedLoanBalancesRouteImport } from './routes/reported-loan-balances'
 import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ShareEventVoidRouteImport } from './routes/share-event-void'
 import { Route as ShareSalesRouteImport } from './routes/share-sales'
 import { Route as ShareTradesRouteImport } from './routes/share-trades'
@@ -75,6 +78,7 @@ import { Route as TradePublicationsRouteImport } from './routes/trade-publicatio
 import { Route as TradeReconciliationRouteImport } from './routes/trade-reconciliation'
 import { Route as TradeVoidRouteImport } from './routes/trade-void'
 import { Route as TrialBalanceRouteImport } from './routes/trial-balance'
+import { Route as ApiDocumentsRouteImport } from './routes/api/documents'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -160,6 +164,16 @@ const CollateralRoute = CollateralRouteImport.update({
 const CreditReviewRoute = CreditReviewRouteImport.update({
   id: '/credit-review',
   path: '/credit-review',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocumentsRoute = DocumentsRouteImport.update({
+  id: '/documents',
+  path: '/documents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FulfilmentVoidRoute = FulfilmentVoidRouteImport.update({
@@ -358,6 +372,11 @@ const ReportsRoute = ReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ShareEventVoidRoute = ShareEventVoidRouteImport.update({
   id: '/share-event-void',
   path: '/share-event-void',
@@ -408,6 +427,11 @@ const TrialBalanceRoute = TrialBalanceRouteImport.update({
   path: '/trial-balance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDocumentsRoute = ApiDocumentsRouteImport.update({
+  id: '/api/documents',
+  path: '/api/documents',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -432,6 +456,8 @@ export interface FileRoutesByFullPath {
   '/cash-register': typeof CashRegisterRoute
   '/collateral': typeof CollateralRoute
   '/credit-review': typeof CreditReviewRoute
+  '/documents': typeof DocumentsRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/fulfilment-void': typeof FulfilmentVoidRoute
   '/fund-observations': typeof FundObservationsRoute
   '/group-books': typeof GroupBooksRoute
@@ -471,6 +497,7 @@ export interface FileRoutesByFullPath {
   '/reported-loan-balance-import': typeof ReportedLoanBalanceImportRoute
   '/reported-loan-balances': typeof ReportedLoanBalancesRoute
   '/reports': typeof ReportsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/share-event-void': typeof ShareEventVoidRoute
   '/share-sales': typeof ShareSalesRoute
   '/share-trades': typeof ShareTradesRoute
@@ -481,6 +508,7 @@ export interface FileRoutesByFullPath {
   '/trade-reconciliation': typeof TradeReconciliationRoute
   '/trade-void': typeof TradeVoidRoute
   '/trial-balance': typeof TrialBalanceRoute
+  '/api/documents': typeof ApiDocumentsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
@@ -501,6 +529,8 @@ export interface FileRoutesByTo {
   '/cash-register': typeof CashRegisterRoute
   '/collateral': typeof CollateralRoute
   '/credit-review': typeof CreditReviewRoute
+  '/documents': typeof DocumentsRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/fulfilment-void': typeof FulfilmentVoidRoute
   '/fund-observations': typeof FundObservationsRoute
   '/group-books': typeof GroupBooksRoute
@@ -540,6 +570,7 @@ export interface FileRoutesByTo {
   '/reported-loan-balance-import': typeof ReportedLoanBalanceImportRoute
   '/reported-loan-balances': typeof ReportedLoanBalancesRoute
   '/reports': typeof ReportsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/share-event-void': typeof ShareEventVoidRoute
   '/share-sales': typeof ShareSalesRoute
   '/share-trades': typeof ShareTradesRoute
@@ -550,6 +581,7 @@ export interface FileRoutesByTo {
   '/trade-reconciliation': typeof TradeReconciliationRoute
   '/trade-void': typeof TradeVoidRoute
   '/trial-balance': typeof TrialBalanceRoute
+  '/api/documents': typeof ApiDocumentsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
@@ -571,6 +603,8 @@ export interface FileRoutesById {
   '/cash-register': typeof CashRegisterRoute
   '/collateral': typeof CollateralRoute
   '/credit-review': typeof CreditReviewRoute
+  '/documents': typeof DocumentsRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/fulfilment-void': typeof FulfilmentVoidRoute
   '/fund-observations': typeof FundObservationsRoute
   '/group-books': typeof GroupBooksRoute
@@ -610,6 +644,7 @@ export interface FileRoutesById {
   '/reported-loan-balance-import': typeof ReportedLoanBalanceImportRoute
   '/reported-loan-balances': typeof ReportedLoanBalancesRoute
   '/reports': typeof ReportsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/share-event-void': typeof ShareEventVoidRoute
   '/share-sales': typeof ShareSalesRoute
   '/share-trades': typeof ShareTradesRoute
@@ -620,6 +655,7 @@ export interface FileRoutesById {
   '/trade-reconciliation': typeof TradeReconciliationRoute
   '/trade-void': typeof TradeVoidRoute
   '/trial-balance': typeof TrialBalanceRoute
+  '/api/documents': typeof ApiDocumentsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
@@ -642,6 +678,8 @@ export interface FileRouteTypes {
     | '/cash-register'
     | '/collateral'
     | '/credit-review'
+    | '/documents'
+    | '/forgot-password'
     | '/fulfilment-void'
     | '/fund-observations'
     | '/group-books'
@@ -681,6 +719,7 @@ export interface FileRouteTypes {
     | '/reported-loan-balance-import'
     | '/reported-loan-balances'
     | '/reports'
+    | '/reset-password'
     | '/share-event-void'
     | '/share-sales'
     | '/share-trades'
@@ -691,6 +730,7 @@ export interface FileRouteTypes {
     | '/trade-reconciliation'
     | '/trade-void'
     | '/trial-balance'
+    | '/api/documents'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -711,6 +751,8 @@ export interface FileRouteTypes {
     | '/cash-register'
     | '/collateral'
     | '/credit-review'
+    | '/documents'
+    | '/forgot-password'
     | '/fulfilment-void'
     | '/fund-observations'
     | '/group-books'
@@ -750,6 +792,7 @@ export interface FileRouteTypes {
     | '/reported-loan-balance-import'
     | '/reported-loan-balances'
     | '/reports'
+    | '/reset-password'
     | '/share-event-void'
     | '/share-sales'
     | '/share-trades'
@@ -760,6 +803,7 @@ export interface FileRouteTypes {
     | '/trade-reconciliation'
     | '/trade-void'
     | '/trial-balance'
+    | '/api/documents'
     | '/api/auth/$'
   id:
     | '__root__'
@@ -780,6 +824,8 @@ export interface FileRouteTypes {
     | '/cash-register'
     | '/collateral'
     | '/credit-review'
+    | '/documents'
+    | '/forgot-password'
     | '/fulfilment-void'
     | '/fund-observations'
     | '/group-books'
@@ -819,6 +865,7 @@ export interface FileRouteTypes {
     | '/reported-loan-balance-import'
     | '/reported-loan-balances'
     | '/reports'
+    | '/reset-password'
     | '/share-event-void'
     | '/share-sales'
     | '/share-trades'
@@ -829,6 +876,7 @@ export interface FileRouteTypes {
     | '/trade-reconciliation'
     | '/trade-void'
     | '/trial-balance'
+    | '/api/documents'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
@@ -850,6 +898,8 @@ export interface RootRouteChildren {
   CashRegisterRoute: typeof CashRegisterRoute
   CollateralRoute: typeof CollateralRoute
   CreditReviewRoute: typeof CreditReviewRoute
+  DocumentsRoute: typeof DocumentsRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   FulfilmentVoidRoute: typeof FulfilmentVoidRoute
   FundObservationsRoute: typeof FundObservationsRoute
   GroupBooksRoute: typeof GroupBooksRoute
@@ -889,6 +939,7 @@ export interface RootRouteChildren {
   ReportedLoanBalanceImportRoute: typeof ReportedLoanBalanceImportRoute
   ReportedLoanBalancesRoute: typeof ReportedLoanBalancesRoute
   ReportsRoute: typeof ReportsRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   ShareEventVoidRoute: typeof ShareEventVoidRoute
   ShareSalesRoute: typeof ShareSalesRoute
   ShareTradesRoute: typeof ShareTradesRoute
@@ -899,6 +950,7 @@ export interface RootRouteChildren {
   TradeReconciliationRoute: typeof TradeReconciliationRoute
   TradeVoidRoute: typeof TradeVoidRoute
   TrialBalanceRoute: typeof TrialBalanceRoute
+  ApiDocumentsRoute: typeof ApiDocumentsRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -1021,6 +1073,20 @@ declare module '@tanstack/react-router' {
       path: '/credit-review'
       fullPath: '/credit-review'
       preLoaderRoute: typeof CreditReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/documents': {
+      id: '/documents'
+      path: '/documents'
+      fullPath: '/documents'
+      preLoaderRoute: typeof DocumentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/fulfilment-void': {
@@ -1296,6 +1362,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/share-event-void': {
       id: '/share-event-void'
       path: '/share-event-void'
@@ -1366,6 +1439,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TrialBalanceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/documents': {
+      id: '/api/documents'
+      path: '/api/documents'
+      fullPath: '/api/documents'
+      preLoaderRoute: typeof ApiDocumentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -1394,6 +1474,8 @@ const rootRouteChildren: RootRouteChildren = {
   CashRegisterRoute: CashRegisterRoute,
   CollateralRoute: CollateralRoute,
   CreditReviewRoute: CreditReviewRoute,
+  DocumentsRoute: DocumentsRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   FulfilmentVoidRoute: FulfilmentVoidRoute,
   FundObservationsRoute: FundObservationsRoute,
   GroupBooksRoute: GroupBooksRoute,
@@ -1433,6 +1515,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportedLoanBalanceImportRoute: ReportedLoanBalanceImportRoute,
   ReportedLoanBalancesRoute: ReportedLoanBalancesRoute,
   ReportsRoute: ReportsRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   ShareEventVoidRoute: ShareEventVoidRoute,
   ShareSalesRoute: ShareSalesRoute,
   ShareTradesRoute: ShareTradesRoute,
@@ -1443,6 +1526,7 @@ const rootRouteChildren: RootRouteChildren = {
   TradeReconciliationRoute: TradeReconciliationRoute,
   TradeVoidRoute: TradeVoidRoute,
   TrialBalanceRoute: TrialBalanceRoute,
+  ApiDocumentsRoute: ApiDocumentsRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

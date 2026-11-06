@@ -12,13 +12,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#
 import { getSession } from '#/lib/auth.functions'
 import { addPolicyTargetFn, listPolicyTargetsFn } from '#/server/policy/functions'
 import {PendingRequestNotice,usePendingRequest} from '#/lib/pending-requests/use-pending'
+import { validatePolicyRange } from '#/lib/policy-range'
 
 export const Route=createFileRoute('/policy')({
  beforeLoad:async()=>{const session=await getSession();if(!session) throw redirect({to:'/login'});return {userId:session.user.id}},
  loader:async()=>{try{return {targets:await listPolicyTargetsFn(),available:true}}catch{return {targets:[],available:false}}},
  component:PolicyPage,
 })
-function basisPoints(value:string):string { const match=/^(\d{1,3})(?:\.(\d{1,2}))?$/.exec(value.trim()); if(!match) throw new Error('Invalid percentage'); return String(Number(match[1])*100+Number((match[2]||'').padEnd(2,'0'))) }
 type PolicyRequest={idempotencyKey:string;assetClass:string;effectiveDate:string;minBasisPoints:string;maxBasisPoints:string;targetBasisPoints:string;source:string;notes:string}
 function PolicyPage(){
  const {targets,available}=Route.useLoaderData(),router=useRouter(),{userId}=Route.useRouteContext()
@@ -27,7 +27,7 @@ function PolicyPage(){
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('')
  async function refreshAfterSave(confirmed:string){setMessage(confirmed);try{await router.invalidate()}catch{setMessage(`${confirmed} The list could not be refreshed; reload the page to see the saved record.`)}}
  async function send(payload:PolicyRequest,isNew:boolean){setBusy(true);setError('');setMessage('');try{await pending.send(payload,v=>addPolicyTargetFn({data:{requestKey:v.idempotencyKey,assetClass:v.assetClass,effectiveDate:v.effectiveDate,minBasisPoints:v.minBasisPoints,maxBasisPoints:v.maxBasisPoints,targetBasisPoints:v.targetBasisPoints,source:v.source,notes:v.notes}}),isNew);setAssetClass('');setMin('');setMax('');setTarget('');setSource('');setNotes('');await refreshAfterSave('Policy range recorded.')}catch{setError('Policy range was not confirmed. Check the register, then retry the pending request unchanged if the result is uncertain.')}finally{setBusy(false)}}
- async function submit(e:React.FormEvent){e.preventDefault();try{await send({idempotencyKey:crypto.randomUUID(),assetClass,effectiveDate:date,minBasisPoints:basisPoints(min),maxBasisPoints:basisPoints(max),targetBasisPoints:target?basisPoints(target):'',source,notes},true)}catch{setError('Check the percentage values and try again.')}}
+ async function submit(e:React.FormEvent){e.preventDefault();try{const range=validatePolicyRange(min,max,target);await send({idempotencyKey:crypto.randomUUID(),assetClass,effectiveDate:date,minBasisPoints:range.min,maxBasisPoints:range.max,targetBasisPoints:range.target,source,notes},true)}catch(error){setError(error instanceof Error?error.message:'Check the percentage values and try again.')}}
  async function discardPending(){if(await confirmAction('This request may already have been recorded. Check the register before discarding it. Discard the pending request?')){try{pending.discard()}catch{setError('Could not discard the pending request in this tab.')}}}
  return <div className="app"><header><Link to="/" className="brand" style={{color:'inherit',textDecoration:'none'}}><span className="brand-mark">R</span><span>RNIG <small>INVESTMENT GROUP</small></span></Link><Link to="/" className="quiet" style={{textDecoration:'none'}}>Back to overview</Link></header><main className="dashboard"><p className="eyebrow">ADMINISTRATION</p><h1>Investment policy</h1><p className="lead">Record the approved allocation ranges and their source.</p>
  {!available?<Alert role="alert"><AlertDescription>This register is unavailable or you do not have permission to view it.</AlertDescription></Alert>:<>

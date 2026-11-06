@@ -16,6 +16,12 @@
       "database_id": "d0660dc0-419c-41a2-bb3b-d4dc4248d573"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "RNIG_DOCUMENTS",
+      "bucket_name": "rnig-investments-documents"
+    }
+  ],
   "vars": {
     "BETTER_AUTH_URL": "https://investments.fidexa.org"
   },
