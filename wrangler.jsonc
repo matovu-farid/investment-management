@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "rnig-investments",
+  "compatibility_date": "2026-11-03",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "main": "@tanstack/react-start/server-entry",
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "rnig-investments",
+      "database_id": "d0660dc0-419c-41a2-bb3b-d4dc4248d573"
+    }
+  ],
+  "vars": {
+    "BETTER_AUTH_URL": "https://investments.fidexa.org"
+  },
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "investments.fidexa.org",
+      "custom_domain": true
+    }
+  ]
+}

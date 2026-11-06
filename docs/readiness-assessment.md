@@ -1,0 +1,30 @@
+# Build readiness assessment
+
+Assessed 6 November 2026 against `BUILD-BRIEF.md` and the supplied source documents. The deployed workspace is a development system, not a reconciled set of group books.
+
+| Requirement | Current evidence | Remaining work or decision |
+| --- | --- | --- |
+| Platform and access | TanStack Start runs on a Cloudflare Worker with D1; the custom domain is configured in `wrangler.jsonc`. A fresh development administrator sign-in succeeded, with email verification disabled. Public sign-up is disabled. | Enable email verification before real-member onboarding. Email delivery and password reset are not implemented. |
+| Members and shares | Member and share registers, imports, dated holding observations, published indicative values and member account links exist. The `members`, `shares`, `holding-observations`, `share-values` and `portal` tests cover their service rules. | Obtain and validate the authoritative current register and share-price basis. Joint holdings and source snapshots require reconciliation before import. The deployed workspace had no member records at the last browser check. |
+| Member loans and bookings | Individual loans, terms, repayments, credit bookings, fulfilments, collateral facts and manually selected, balanced journal postings exist. A synthetic repayment was reviewed, posted and traced through reconciliation and a balanced trial balance in the local browser. | The GM must provide the interest formula, repayment allocation, capacity and recovery rules. The system does not calculate authoritative outstanding loan balances or automatically decide credit eligibility. |
+| Investments and policy | Investment and transaction registers, dated valuations, policy ranges, budgets and allocation comparisons exist. Tests cover these services and a synthetic budget comparison was exercised in the browser. | Confirm policy versions, asset mapping, valuation and budget bases before using comparisons as approved compliance or reports. |
+| Share sales | Administrators can record requests and publish anonymous notices; linked members can record interest. Local browser testing and announcement tests verified that a synthetic notice did not expose seller identity or private notes. | Confirm allocation, approval, settlement and buyback rules. Interest does not transfer shares or settle a transaction. |
+| Books and board reporting | Balanced journals, reversals, trial balance, cash and statement working papers, and dated board-pack drafts exist. Tests cover the ledger and reporting services. | Obtain approved account mappings, opening balances, reporting conventions and reconciled source statements; the supplied financial statements contain an unbalancing figure. The generated views are not approved financial statements. |
+| Permissions | Server-side admin and linked-member checks exist, and tests cover key access boundaries. | The board must confirm the final role and visibility matrix before real members are onboarded. |
+| Delivery and testing | The local full suite passed on 6 November 2026; subsequent targeted tests and browser checks are documented in `architecture.md`. The deployed app and custom domain responded, and the live development account authenticated. | Continue end-to-end verification after business decisions. The printable lending acknowledgment has not been verified in a print preview. |
+
+On 6 November 2026, Wrangler reported no pending migrations for the remote `rnig-investments` D1 database. This confirms migration version alignment at that time; it does not validate the correctness or completeness of the database contents.
+
+The credit-booking fulfilment tests check partial fulfilments, retry behavior, over-fulfilment prevention and exclusion of voided fulfilments. The report repository tests also exercise exact totals above JavaScript's safe-integer range; both targeted test groups passed on 6 November 2026.
+
+The date-input source scan on 6 November 2026 found no direct date inputs outside the shared `DatePickerInput` implementation. Its date parsing and formatting tests passed in both Africa/Kampala and America/Los_Angeles time zones. This scan does not replace interaction testing of every form.
+
+`docs/questions-for-gm.md` contains the questions and source records needed to complete the unresolved financial work. No unconfirmed formula, valuation, ownership transfer or settlement should be treated as an approved rule.
+
+The application source, migrations and tests are tracked in a local Git commit on `main`. This local commit has not been pushed; establish a separate backup before relying on it for further delivery. The proposed R2 document storage in the architecture is not currently bound in Wrangler and is not an implemented feature.
+
+On 6 November 2026, an isolated local browser test saved a synthetic credit booking while a register lookup was deliberately unavailable. The register hid its forms and confirmed that the booking had been recorded; after the lookup was restored and the page reloaded, the booking appeared. This verifies the booking loader-failure path, not every possible network or routing failure. Type checking and the production build passed, and Worker version `75e91a65-75ac-4f1e-a4bc-734e3b3ce0e0` was deployed.
+
+A local browser inspection on 6 November 2026 displayed a synthetic repayment acknowledgment with the member, amount, payment date and linked journal. The browser automation timed out when invoking the print action, so print-preview layout and actual printing remain unverified.
+
+On 6 November 2026, an isolated local browser test recorded a synthetic group-buyer trade and matching seller sale event, then reviewed and linked them through trade reconciliation. The history showed the group as buyer with no buyer share event. This verifies recording and reconciliation only; it does not verify settlement, transfer to the group or the unresolved buyback pricing and approval rules.

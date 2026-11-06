@@ -1,0 +1,7 @@
+import type {Booking,BookingStatusEvent,BookingHistoryRepository} from './service'
+const columns='id,booking_id AS bookingId,event_type AS eventType,event_date AS eventDate,reason,created_by AS createdBy,created_at AS createdAt'
+export function createBookingHistoryRepository(db:D1Database):BookingHistoryRepository{return {
+ async roleFor(id){return (await db.prepare('SELECT role FROM app_user_roles WHERE user_id=?').bind(id).first<{role:string}>())?.role??null},
+ async list(){const bookings=(await db.prepare('SELECT b.id,m.full_name AS memberName,b.requested_minor AS requestedMinor,b.currency,b.requested_date AS requestedDate,b.status FROM credit_bookings b JOIN members m ON m.id=b.member_id ORDER BY b.requested_date DESC,b.id').all<Booking>()).results;const events=(await db.prepare(`SELECT ${columns} FROM booking_status_events ORDER BY event_date DESC,created_at DESC,id`).all<BookingStatusEvent>()).results;return {bookings,events}},
+ async createEvent(v,k){await db.prepare('INSERT INTO booking_status_events(id,booking_id,event_type,event_date,reason,created_by,request_key) VALUES(?,?,?,?,?,?,?) ON CONFLICT(request_key) DO NOTHING').bind(v.id,v.bookingId,v.eventType,v.eventDate,v.reason,v.createdBy,k).run();const saved=await db.prepare(`SELECT ${columns} FROM booking_status_events WHERE request_key=?`).bind(k).first<BookingStatusEvent>();if(!saved||(['bookingId','eventType','eventDate','reason','createdBy'] as const).some(f=>saved[f]!==v[f]))throw new Error('Request key already used for different details');return saved},
+}}

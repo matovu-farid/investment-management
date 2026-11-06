@@ -1,0 +1,3 @@
+CREATE TRIGGER imported_investment_no_delete BEFORE DELETE ON investments WHEN EXISTS(SELECT 1 FROM investment_import_refs WHERE kind='investment' AND record_id=OLD.id) BEGIN SELECT RAISE(ABORT,'imported investment immutable'); END;
+CREATE TRIGGER imported_valuation_no_delete BEFORE DELETE ON investment_valuations WHEN EXISTS(SELECT 1 FROM investment_import_refs WHERE kind='valuation' AND record_id=OLD.id) BEGIN SELECT RAISE(ABORT,'imported valuation immutable'); END;
+CREATE TRIGGER imported_transaction_no_delete BEFORE DELETE ON investment_transactions WHEN EXISTS(SELECT 1 FROM investment_import_refs WHERE kind='transaction' AND record_id=OLD.id) BEGIN SELECT RAISE(ABORT,'imported transaction immutable'); END;

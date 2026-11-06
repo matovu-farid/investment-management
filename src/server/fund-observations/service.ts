@@ -1,0 +1,20 @@
+export type FundObservation = {id:string;observedDate:string;amountMinor:string;currency:string;basis:string;source:string;createdBy:string;createdAt:string;voidedAt:string|null;voidReason:string|null}
+const cols = 'o.id,o.observed_date AS observedDate,o.amount_minor AS amountMinor,o.currency,o.basis,o.source,o.created_by AS createdBy,o.created_at AS createdAt,v.created_at AS voidedAt,v.reason AS voidReason'
+const adminExists = "EXISTS(SELECT 1 FROM app_user_roles WHERE user_id=? AND role='admin')"
+async function admin(db:D1Database,id:string|null){if(!id||(await db.prepare('SELECT role FROM app_user_roles WHERE user_id=?').bind(id).first<{role:string}>())?.role!=='admin')throw new Error('Unauthorized');return id}
+function obj(x:unknown):Record<string,unknown>{if(!x||typeof x!=='object'||Array.isArray(x))throw new Error('Invalid request');return x as Record<string,unknown>}
+function key(x:unknown){if(typeof x!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(x))throw new Error('Invalid request key');return x.toLowerCase()}
+function str(x:unknown,max:number){if(typeof x!=='string'||!x.trim()||x.trim().length>max)throw new Error('Invalid text');return x.trim()}
+function date(x:unknown){if(typeof x!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(x)||!Number.isFinite(Date.parse(x+'T00:00:00Z'))||new Date(x+'T00:00:00Z').toISOString().slice(0,10)!==x)throw new Error('Invalid date');return x}
+export async function listFundObservations(db:D1Database,actorId:string|null){const actor=await admin(db,actorId);const result=await db.prepare(`SELECT ${cols} FROM fund_availability_observations o LEFT JOIN fund_availability_voids v ON v.observation_id=o.id WHERE ${adminExists} ORDER BY o.observed_date DESC,o.created_at DESC,o.id`).bind(actor).all<FundObservation>();return {observations:result.results}}
+export async function recordFundObservation(db:D1Database,actorId:string|null,input:unknown){const actor=await admin(db,actorId),v=obj(input),requestKey=key(v.requestKey),observedDate=date(v.observedDate),basis=str(v.basis,450),source=str(v.source,450);if(typeof v.amountMinor!=='string'||!/^(0|[1-9][0-9]{0,29})$/.test(v.amountMinor)||typeof v.currency!=='string'||!/^[A-Z]{3}$/.test(v.currency))throw new Error('Invalid amount or currency');const amountMinor=v.amountMinor,currency=v.currency
+ await db.prepare('INSERT INTO fund_availability_observations(id,observed_date,amount_minor,currency,basis,source,request_key,created_by) SELECT ?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM fund_availability_observations WHERE request_key=?)').bind(crypto.randomUUID(),observedDate,amountMinor,currency,basis,source,requestKey,actor,requestKey).run()
+ const saved=await db.prepare(`SELECT ${cols} FROM fund_availability_observations o LEFT JOIN fund_availability_voids v ON v.observation_id=o.id WHERE o.request_key=?`).bind(requestKey).first<FundObservation>()
+ if(!saved||saved.observedDate!==observedDate||saved.amountMinor!==amountMinor||saved.currency!==currency||saved.basis!==basis||saved.source!==source||saved.createdBy!==actor)throw new Error('Request key already used')
+ return {id:saved.id,active:saved.voidedAt===null}
+}
+export async function voidFundObservation(db:D1Database,actorId:string|null,input:unknown){const actor=await admin(db,actorId),v=obj(input),requestKey=key(v.requestKey),observationId=str(v.observationId,128),reason=str(v.reason,450)
+ await db.prepare('INSERT INTO fund_availability_voids(id,observation_id,reason,request_key,created_by) SELECT ?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM fund_availability_voids WHERE request_key=?)').bind(crypto.randomUUID(),observationId,reason,requestKey,actor,requestKey).run()
+ const saved=await db.prepare('SELECT id,observation_id AS observationId,reason,created_by AS createdBy FROM fund_availability_voids WHERE request_key=?').bind(requestKey).first<{id:string;observationId:string;reason:string;createdBy:string}>()
+ if(!saved||saved.observationId!==observationId||saved.reason!==reason||saved.createdBy!==actor)throw new Error('Request key already used');return {id:saved.id}
+}

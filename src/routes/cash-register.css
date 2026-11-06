@@ -1,0 +1,11 @@
+.cash-register .cash-panel { margin-top: 1.5rem; }
+.cash-register label { display: grid; gap: .5rem; }
+.cash-register table { width: 100%; text-align: left; border-collapse: collapse; margin-top: 1rem; }
+.cash-register th, .cash-register td { padding: .7rem; vertical-align: top; border-bottom: 1px solid #e2e9e2; }
+@media print {
+  .cash-register .cash-screen { display: none !important; }
+  .cash-register main { max-width: none; padding: 0; }
+  .cash-register .cash-panel { border: 0 !important; box-shadow: none !important; }
+  .cash-register table { font-size: 9pt; }
+  .cash-register th, .cash-register td { padding: .3rem; }
+}

@@ -1,0 +1,9 @@
+export type Booking={id:string;memberName:string;requestedMinor:number;currency:string;requestedDate:string;status:string}
+export type BookingStatusEvent={id:string;bookingId:string;eventType:'held'|'resumed';eventDate:string;reason:string;createdBy:string;createdAt?:string}
+export interface BookingHistoryRepository {roleFor(id:string):Promise<string|null>;list():Promise<{bookings:Booking[];events:BookingStatusEvent[]}>;createEvent(value:BookingStatusEvent,key:string):Promise<BookingStatusEvent>}
+async function admin(repo:BookingHistoryRepository,id:string|null):Promise<string>{if(!id||await repo.roleFor(id)!=='admin')throw new Error('Unauthorized');return id}
+function text(v:unknown,max:number):string{if(typeof v!=='string'||!v.trim()||v.trim().length>max)throw new Error('Invalid input');return v.trim()}
+function date(v:unknown):string{const d=text(v,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(d)||!Number.isFinite(Date.parse(`${d}T00:00:00Z`))||new Date(`${d}T00:00:00Z`).toISOString().slice(0,10)!==d)throw new Error('Invalid date');return d}
+function key(v:unknown):string{const k=text(v,36).toLowerCase();if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(k))throw new Error('Invalid request key');return k}
+export async function listBookingHistory(repo:BookingHistoryRepository,id:string|null){await admin(repo,id);return repo.list()}
+export async function addStatusEvent(repo:BookingHistoryRepository,id:string|null,input:unknown){const createdBy=await admin(repo,id);if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('Invalid input');const v=input as Record<string,unknown>;const eventType=text(v.eventType,10);if(eventType!=='held'&&eventType!=='resumed')throw new Error('Invalid event type');return repo.createEvent({id:crypto.randomUUID(),bookingId:text(v.bookingId,128),eventType,eventDate:date(v.eventDate),reason:text(v.reason,2000),createdBy},key(v.requestKey))}

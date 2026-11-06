@@ -1,0 +1,7 @@
+ALTER TABLE loan_balance_publications ADD COLUMN observation_id TEXT REFERENCES reported_loan_balances(id);
+CREATE INDEX loan_balance_publications_observation ON loan_balance_publications(observation_id,withdrawn_at);
+CREATE TRIGGER loan_balance_observation_publish_guard BEFORE INSERT ON loan_balance_publications WHEN NEW.observation_id IS NOT NULL BEGIN
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM reported_loan_balances o WHERE o.id=NEW.observation_id AND o.loan_id=NEW.loan_id AND o.member_id=NEW.member_id AND o.currency=NEW.currency AND o.disbursement_date=NEW.disbursement_date AND o.principal_minor=NEW.principal_minor AND o.observed_date=NEW.observed_date AND o.amount_minor=NEW.amount_minor AND o.basis=NEW.basis AND o.source=NEW.source AND NOT EXISTS(SELECT 1 FROM reported_loan_balance_voids v WHERE v.observation_id=o.id)) THEN RAISE(ABORT,'observation changed or voided') END;
+END;
+CREATE TRIGGER loan_balance_observation_provenance_immutable BEFORE UPDATE OF observation_id ON loan_balance_publications WHEN NEW.observation_id IS NOT OLD.observation_id BEGIN SELECT RAISE(ABORT,'balance publication provenance immutable'); END;
+CREATE TRIGGER reported_loan_balance_void_publication_guard BEFORE INSERT ON reported_loan_balance_voids WHEN EXISTS(SELECT 1 FROM loan_balance_publications p WHERE p.observation_id=NEW.observation_id AND p.withdrawn_at IS NULL) BEGIN SELECT RAISE(ABORT,'withdraw linked publications before voiding observation'); END;

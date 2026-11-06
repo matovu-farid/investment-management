@@ -1,0 +1,11 @@
+.board-packets-ui form > section { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
+.board-packets-ui form > section h3 { margin: 0 0 .5rem; }
+.board-packets-ui form > section p { color: var(--muted-foreground); line-height: 1.6; }
+.board-packets-ui form fieldset { border: 1px solid var(--border); border-radius: .5rem; padding: 1rem; margin: 1rem 0; min-width: 0; }
+.board-packets-ui form label { line-height: 1.5; }
+.board-packets-ui form input:not([type=checkbox]) { margin-top: .3rem; }
+.board-packets-ui form [data-slot=native-select-wrapper] { display: inline-flex; max-width: 100%; vertical-align: middle; margin: .3rem 0; }
+.board-packets-ui form select { max-width: min(100%, 54rem); }
+.board-packets-ui .board-period-fields { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1rem 0; align-items: end; }
+.board-packets-ui details { border-top: 1px solid var(--border); padding: 1rem 0; }
+.board-packets-ui summary { cursor: pointer; font-weight: 600; }

@@ -1,0 +1,10 @@
+.acknowledgment-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1rem 2rem; }
+.acknowledgment-facts dt { color: var(--muted-foreground); font-size: .875rem; }
+.acknowledgment-facts dd { margin: .25rem 0 0; overflow-wrap: anywhere; }
+@media print {
+  .acknowledgment-controls { display: none !important; }
+  .acknowledgment-page { width: 100%; max-width: none; padding: 0; }
+  .acknowledgment-page [data-slot="card"] { break-inside: avoid; box-shadow: none; }
+  .acknowledgment-page table { font-size: .75rem; }
+  .acknowledgment-page td { overflow-wrap: anywhere; }
+}

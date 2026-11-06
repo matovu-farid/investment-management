@@ -1,0 +1,27 @@
+CREATE TABLE loan_source_voids (
+ id TEXT PRIMARY KEY NOT NULL, source_kind TEXT NOT NULL CHECK(source_kind IN ('loan','repayment')),
+ source_id TEXT NOT NULL, reason TEXT NOT NULL CHECK(length(trim(reason)) BETWEEN 1 AND 450),
+ request_key TEXT NOT NULL UNIQUE, created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ UNIQUE(source_kind,source_id)
+);
+CREATE TRIGGER lending_void_validate BEFORE INSERT ON loan_source_voids BEGIN
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM app_user_roles WHERE user_id=NEW.created_by AND role='admin') THEN RAISE(ABORT,'unauthorized') END;
+ SELECT CASE WHEN (NEW.source_kind='loan' AND NOT EXISTS(SELECT 1 FROM loans WHERE id=NEW.source_id)) OR (NEW.source_kind='repayment' AND NOT EXISTS(SELECT 1 FROM loan_repayments WHERE id=NEW.source_id)) THEN RAISE(ABORT,'source not found') END;
+ SELECT CASE WHEN NEW.source_kind='loan' AND (EXISTS(SELECT 1 FROM loan_repayments r WHERE r.loan_id=NEW.source_id AND NOT EXISTS(SELECT 1 FROM loan_source_voids v WHERE v.source_kind='repayment' AND v.source_id=r.id)) OR EXISTS(SELECT 1 FROM loan_term_changes WHERE loan_id=NEW.source_id) OR EXISTS(SELECT 1 FROM loan_pledges WHERE loan_id=NEW.source_id) OR EXISTS(SELECT 1 FROM loan_recovery_events WHERE loan_id=NEW.source_id) OR EXISTS(SELECT 1 FROM credit_booking_fulfilments WHERE loan_id=NEW.source_id)) THEN RAISE(ABORT,'loan has dependent records') END;
+ SELECT CASE WHEN EXISTS(SELECT 1 FROM journal_entries j WHERE ((NEW.source_kind='loan' AND j.source_type='loan-disbursement' AND j.source_id=NEW.source_id) OR (NEW.source_kind='repayment' AND j.source_type='loan-repayment' AND j.source_id=NEW.source_id) OR EXISTS(SELECT 1 FROM journal_corrections c WHERE c.journal_id=j.id AND c.source_kind=NEW.source_kind AND c.source_id=NEW.source_id)) AND (j.status='draft' OR (j.status='posted' AND NOT EXISTS(SELECT 1 FROM journal_entries rev WHERE rev.reverses_entry_id=j.id AND rev.status='posted')))) THEN RAISE(ABORT,'source has active or draft journal') END;
+END;
+CREATE TRIGGER lending_void_no_update BEFORE UPDATE ON loan_source_voids BEGIN SELECT RAISE(ABORT,'void history immutable'); END;
+CREATE TRIGGER lending_void_no_delete BEFORE DELETE ON loan_source_voids BEGIN SELECT RAISE(ABORT,'void history immutable'); END;
+CREATE TRIGGER void_repayment_insert BEFORE INSERT ON loan_repayments WHEN EXISTS(SELECT 1 FROM loan_source_voids WHERE source_kind='loan' AND source_id=NEW.loan_id) BEGIN SELECT RAISE(ABORT,'loan void'); END;
+CREATE TRIGGER void_terms_insert BEFORE INSERT ON loan_term_changes WHEN EXISTS(SELECT 1 FROM loan_source_voids WHERE source_kind='loan' AND source_id=NEW.loan_id) BEGIN SELECT RAISE(ABORT,'loan void'); END;
+CREATE TRIGGER void_pledge_insert BEFORE INSERT ON loan_pledges WHEN EXISTS(SELECT 1 FROM loan_source_voids WHERE source_kind='loan' AND source_id=NEW.loan_id) BEGIN SELECT RAISE(ABORT,'loan void'); END;
+CREATE TRIGGER void_recovery_insert BEFORE INSERT ON loan_recovery_events WHEN EXISTS(SELECT 1 FROM loan_source_voids WHERE source_kind='loan' AND source_id=NEW.loan_id) BEGIN SELECT RAISE(ABORT,'loan void'); END;
+CREATE TRIGGER void_fulfilment_insert BEFORE INSERT ON credit_booking_fulfilments WHEN EXISTS(SELECT 1 FROM loan_source_voids WHERE source_kind='loan' AND source_id=NEW.loan_id) BEGIN SELECT RAISE(ABORT,'loan void'); END;
+CREATE TRIGGER void_correction_insert BEFORE INSERT ON journal_corrections WHEN EXISTS(SELECT 1 FROM loan_source_voids WHERE source_kind=NEW.source_kind AND source_id=NEW.source_id) BEGIN SELECT RAISE(ABORT,'source void'); END;
+CREATE TRIGGER void_journal_post BEFORE UPDATE OF status ON journal_entries WHEN NEW.status='posted' AND (EXISTS(SELECT 1 FROM loan_source_voids v WHERE (v.source_kind='loan' AND NEW.source_type='loan-disbursement' AND v.source_id=NEW.source_id) OR (v.source_kind='repayment' AND NEW.source_type='loan-repayment' AND v.source_id=NEW.source_id)) OR EXISTS(SELECT 1 FROM journal_corrections c JOIN loan_source_voids v ON v.source_kind=c.source_kind AND v.source_id=c.source_id WHERE c.journal_id=NEW.id)) BEGIN SELECT RAISE(ABORT,'source void'); END;
+CREATE TRIGGER void_repayment_update BEFORE UPDATE ON loan_repayments WHEN EXISTS(SELECT 1 FROM loan_source_voids WHERE (source_kind='repayment' AND source_id=OLD.id) OR (source_kind='loan' AND source_id=NEW.loan_id)) BEGIN SELECT RAISE(ABORT,'source void'); END;
+CREATE TRIGGER void_loan_update BEFORE UPDATE ON loans WHEN EXISTS(SELECT 1 FROM loan_source_voids WHERE source_kind='loan' AND source_id=OLD.id) BEGIN SELECT RAISE(ABORT,'source void'); END;
+CREATE TRIGGER void_loan_delete BEFORE DELETE ON loans WHEN EXISTS(SELECT 1 FROM loan_source_voids WHERE source_kind='loan' AND source_id=OLD.id) BEGIN SELECT RAISE(ABORT,'source void'); END;
+CREATE TRIGGER void_repayment_delete BEFORE DELETE ON loan_repayments WHEN EXISTS(SELECT 1 FROM loan_source_voids WHERE source_kind='repayment' AND source_id=OLD.id) BEGIN SELECT RAISE(ABORT,'source void'); END;
+CREATE TRIGGER void_terms_update BEFORE UPDATE OF loan_id ON loan_term_changes WHEN EXISTS(SELECT 1 FROM loan_source_voids WHERE source_kind='loan' AND source_id=NEW.loan_id) BEGIN SELECT RAISE(ABORT,'loan void'); END;
+CREATE TRIGGER void_fulfilment_update BEFORE UPDATE OF loan_id ON credit_booking_fulfilments WHEN EXISTS(SELECT 1 FROM loan_source_voids WHERE source_kind='loan' AND source_id=NEW.loan_id) BEGIN SELECT RAISE(ABORT,'loan void'); END;

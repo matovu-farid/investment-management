@@ -1,0 +1,19 @@
+import { strict as assert } from 'node:assert'
+import { readFileSync } from 'node:fs'
+import { DatabaseSync } from 'node:sqlite'
+import { test } from 'node:test'
+import { addStatusEvent, listBookingHistory } from '../../src/server/booking-history/service.ts'
+import { createBookingHistoryRepository } from '../../src/server/booking-history/repository.ts'
+
+const key='1b7af909-c0d0-47ec-8306-c4b9342981e7'
+const event={bookingId:'b',eventDate:'2026-02-01',eventType:'held',reason:'Borrower requested more time',requestKey:key}
+function setup(){
+ const db=new DatabaseSync(':memory:');db.exec('PRAGMA foreign_keys=ON');for(const f of ['0002_domain.sql','0020_booking_history.sql'])db.exec(readFileSync(`migrations/${f}`,'utf8'))
+ db.exec("CREATE TABLE app_user_roles(user_id TEXT PRIMARY KEY,role TEXT);INSERT INTO app_user_roles VALUES('admin','admin'),('member','member');INSERT INTO members(id,member_number,full_name,created_by) VALUES('m','1','Member','admin');INSERT INTO credit_bookings(id,member_id,requested_minor,currency,requested_date,status,created_by) VALUES('b','m',500,'UGX','2026-01-01','waiting','admin');")
+ const adapter={prepare(sql:string){return {async all(){return {results:db.prepare(sql).all()}},bind(...args:unknown[]){const stmt=db.prepare(sql);return {async run(){const r=stmt.run(...args as never[]);return {meta:{changes:r.changes}}},async first(){return stmt.get(...args as never[])??null},async all(){return {results:stmt.all(...args as never[])}}}}}}}
+ return {db,repo:createBookingHistoryRepository(adapter as unknown as D1Database)}
+}
+test('only an administrator may list and append booking history',async()=>{const {db,repo}=setup();await assert.rejects(listBookingHistory(repo,'member'),/unauthorized/i);await assert.rejects(addStatusEvent(repo,null,event),/unauthorized/i);db.close()})
+test('records held and resumed events once without changing booking status',async()=>{const {db,repo}=setup();const held=await addStatusEvent(repo,'admin',event);const retry=await addStatusEvent(repo,'admin',event);assert.equal(held.id,retry.id);await assert.rejects(addStatusEvent(repo,'admin',{...event,reason:'changed'}),/different/i);await addStatusEvent(repo,'admin',{...event,eventDate:'2026-02-02',eventType:'resumed',requestKey:'e6e92873-1d85-4b20-833b-8707a39ab451'});const result=await listBookingHistory(repo,'admin');assert.equal(result.events.length,2);assert.equal(result.bookings[0].status,'waiting');db.close()})
+test('enforces valid input, chronology and immutable event history',async()=>{const {db,repo}=setup();for(const patch of [{eventDate:'2025-12-31'},{eventDate:'2026-02-30'},{eventType:'closed'},{reason:''},{bookingId:'missing'}])await assert.rejects(addStatusEvent(repo,'admin',{...event,...patch}));await addStatusEvent(repo,'admin',event);assert.throws(()=>db.exec("UPDATE booking_status_events SET reason='changed'"),/immutable/i);assert.throws(()=>db.exec('DELETE FROM booking_status_events'),/immutable/i);assert.throws(()=>db.exec("UPDATE credit_bookings SET requested_date='2026-02-02' WHERE id='b'"),/event/i);db.close()})
+test('reload and exact retry after a lost response produces one event',async()=>{const {createPendingStore}=await import('../../src/lib/pending-requests/store.ts');const {db,repo}=setup(),map=new Map<string,string>();const storage={getItem:(k:string)=>map.get(k)??null,setItem:(k:string,v:string)=>{map.set(k,v)},removeItem:(k:string)=>{map.delete(k)}};const payload={...event,idempotencyKey:key};const first=createPendingStore<typeof payload>(storage,'admin','booking-history');first.begin(payload);const saved=await addStatusEvent(repo,'admin',payload);const loaded=createPendingStore<typeof payload>(storage,'admin','booking-history').read();assert.ok(loaded);assert.equal((await addStatusEvent(repo,'admin',loaded)).id,saved.id);assert.equal((db.prepare('SELECT count(*) n FROM booking_status_events').get() as {n:number}).n,1);db.close()})

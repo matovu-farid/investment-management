@@ -1,0 +1,16 @@
+.lending-notice { margin: 32px 0; }
+.lending-card { margin-top: 32px; }
+.lending h2 { font-family: Georgia, serif; font-weight: 500; font-size: 1.5rem; margin: 0; }
+.lending-switch { display: flex; gap: 8px; margin: 18px 0 24px; }
+.lending-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; max-width: 760px; }
+.lending-form label { display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.lending-form [data-slot="native-select-wrapper"] { width: 100%; }
+.lending-form textarea { min-height: 90px; resize: vertical; }
+.lending-full { grid-column: 1 / -1; }
+.lending-submit { justify-self: start; }
+.lending-list { margin-top: 44px; }
+.lending-list h2 { margin-bottom: 18px; }
+.lending-table { overflow-x: auto; background: white; border: 1px solid #e2e9e2; border-radius: 7px; }
+.lending-table table { width: 100%; min-width: 620px; text-align: left; }
+.lending-table th, .lending-table td { vertical-align: top; white-space: pre-wrap; }
+@media (max-width: 600px) { .lending-form { grid-template-columns: 1fr; } .lending-full { grid-column: auto; } }
