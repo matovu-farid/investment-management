@@ -16,7 +16,7 @@ test('password recovery uses a single-use token, revokes sessions and does not e
   db.prepare('INSERT INTO "session" (id,"expiresAt",token,"createdAt","updatedAt","userId") VALUES (?,?,?,?,?,?)').run('session', now + 3600000, 'existing-session', now, now, 'user')
   let message = ''
   const pending: Promise<unknown>[] = []
-  const delivery = createRecoveryDelivery({ PASSWORD_RESET_ENABLED: 'true', PASSWORD_RESET_FROM: 'noreply@fidexa.org', EMAIL: { send: async (mail) => { message = mail.text; return { messageId: 'test' } } } }, 'https://investments.fidexa.org')
+  const delivery = createRecoveryDelivery({ PASSWORD_RESET_ENABLED: 'true', PASSWORD_RESET_FROM: 'noreply@fidexa.org', RESEND_API_KEY: 're_example_test_key' }, 'https://investments.fidexa.org', async (_url, options) => { message = (JSON.parse(String(options?.body)) as {text: string}).text; return new Response('{"id":"test"}', {status: 200}) })
   const auth = betterAuth({ database: db, baseURL: 'https://investments.fidexa.org', secret: '0123456789abcdef0123456789abcdef', emailAndPassword: recoveryAuthSettings(delivery, p => pending.push(p)), rateLimit: { enabled: false } })
   const post = (path: string, body: unknown) => auth.handler(new Request(`https://investments.fidexa.org/api/auth/${path}`, { method: 'POST', headers: { origin: 'https://investments.fidexa.org', 'content-type': 'application/json' }, body: JSON.stringify(body) }))
   const known = await post('request-password-reset', { email: 'member@example.test' })
