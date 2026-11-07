@@ -5,6 +5,9 @@
   .acknowledgment-controls { display: none !important; }
   .acknowledgment-page { width: 100%; max-width: none; padding: 0; }
   .acknowledgment-page [data-slot="card"] { break-inside: avoid; box-shadow: none; }
-  .acknowledgment-page table { font-size: .75rem; }
-  .acknowledgment-page td { overflow-wrap: anywhere; }
+  .acknowledgment-page [data-slot="table-container"] { overflow: visible; }
+  .acknowledgment-page table { width: 100%; table-layout: fixed; font-size: .75rem; }
+  .acknowledgment-page th, .acknowledgment-page td { white-space: normal; overflow-wrap: anywhere; }
+  .acknowledgment-page thead { display: table-header-group; }
+  .acknowledgment-page tr { break-inside: avoid; }
 }

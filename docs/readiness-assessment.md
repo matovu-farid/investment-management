@@ -29,6 +29,10 @@ On 6 November 2026, an isolated local browser test saved a synthetic credit book
 
 A local browser inspection on 6 November 2026 displayed a synthetic repayment acknowledgment with the member, amount, payment date and linked journal. The browser automation timed out when invoking the print action, so print-preview layout and actual printing remain unverified.
 
+On 7 November 2026, a synthetic document replacement was recorded locally with its reason and link to the original. A local HTTP integration test checked administrator upload/download, member and unauthenticated denial, and cross-origin rejection. An isolated board-pack print harness verified selected-draft content preparation and cleanup; browser print preview still timed out, so printed rendering remains unverified. The document and print changes were deployed as Worker version `bb228b9d-4771-4e38-80cc-026289b7e7a3`.
+
+On 7 November 2026, the source archive and Git bundle were restored in disposable locations. Synthetic local D1 and R2 drills checked SQL export/import and PDF bytes and metadata respectively; they did not test live-data or off-account restoration. See [backup and recovery](backup-and-recovery.md).
+
 On 6 November 2026, an isolated local browser test recorded a synthetic group-buyer trade and matching seller sale event, then reviewed and linked them through trade reconciliation. The history showed the group as buyer with no buyer share event. This verifies recording and reconciliation only; it does not verify settlement, transfer to the group or the unresolved buyback pricing and approval rules.
 
 On 6 November 2026, four integration checks passed against a disposable local Worker and D1 copy: email/password sign-in and sign-out with an unverified test account, disabled public sign-up, one-use member invitation and linked portal access, cross-origin request rejection, and safe server-rendered login form behavior. These checks do not validate real email delivery.

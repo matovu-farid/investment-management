@@ -42,3 +42,31 @@ test('passes opaque cursors through without exposing documents to non-admins',as
  await assert.rejects(listDocuments(paged,async()=>false,'member','previous-page'),/unauthorized/i)
  assert.equal(seen.length,1)
 })
+
+test('a replacement keeps the original and records an explicit reason and link',async()=>{
+ const {bucket,records}=setup(),admin=async()=>true
+ const replacement={...input,id:'b2fbafbc-7706-40e1-a855-a57fd54a1428',title:'Corrected policy',replacesId:input.id,replacementReason:'Revised after board review'}
+ await uploadDocument(bucket,admin,'admin',input)
+ await uploadDocument(bucket,admin,'admin',replacement)
+ await uploadDocument(bucket,admin,'admin',replacement)
+ assert.equal(records.size,2)
+ assert.ok(await downloadDocument(bucket,admin,'admin',input.id))
+ const rows=(await listDocuments(bucket,admin,'admin')).documents
+ const original=rows.find(row=>row.id===input.id),current=rows.find(row=>row.id===replacement.id)
+ assert.equal(original?.replacesId,'')
+ assert.equal(current?.replacesId,input.id)
+ assert.equal(current?.replacementReason,'Revised after board review')
+ assert.equal(current?.recordedBy,'admin')
+ await assert.rejects(uploadDocument(bucket,admin,'admin',{...replacement,replacementReason:'Changed'}),/different/i)
+})
+
+test('replacement requires an existing distinct document, a reason, and admin access',async()=>{
+ const {bucket,records}=setup(),admin=async()=>true
+ const replacement={...input,id:'b2fbafbc-7706-40e1-a855-a57fd54a1428',replacesId:input.id,replacementReason:'Corrected'}
+ await assert.rejects(uploadDocument(bucket,admin,'admin',replacement),/original|prior|previous/i)
+ await uploadDocument(bucket,admin,'admin',input)
+ await assert.rejects(uploadDocument(bucket,admin,'admin',{...replacement,replacementReason:' '}),/reason/i)
+ await assert.rejects(uploadDocument(bucket,admin,'admin',{...replacement,replacesId:replacement.id}),/distinct|same/i)
+ await assert.rejects(uploadDocument(bucket,async()=>false,'member',replacement),/unauthorized/i)
+ assert.equal(records.size,1)
+})

@@ -1,0 +1,19 @@
+.board-packet-print-copy, .board-packet-print-heading { display: none; }
+
+@media print {
+  body.board-packet-printing > :not(.board-packet-print-copy) { display: none !important; }
+  body.board-packet-printing { margin: 0; background: white; color: black; }
+  body.board-packet-printing > .board-packet-print-copy { display: block; width: 100%; color: black; }
+  .board-packet-print-copy .board-packet-print-heading { display: block; }
+  .board-packet-print-copy button:not([data-slot="accordion-trigger"]) { display: none !important; }
+  .board-packet-print-copy [data-slot="accordion-trigger"] { display: block; padding: .5rem 0; font-size: 1rem; font-weight: 700; }
+  .board-packet-print-copy [data-slot="accordion-trigger"] svg { display: none; }
+  .board-packet-print-copy [data-slot="accordion"], .board-packet-print-copy section { border-color: #888; box-shadow: none; }
+  .board-packet-print-copy [data-slot="accordion-content"], .board-packet-print-copy [data-slot="table-container"] { overflow: visible !important; }
+  .board-packet-print-copy [data-slot="accordion-content"] { height: auto !important; animation: none !important; }
+  .board-packet-print-copy table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 8pt; }
+  .board-packet-print-copy th, .board-packet-print-copy td { white-space: normal; overflow-wrap: anywhere; vertical-align: top; }
+  .board-packet-print-copy thead { display: table-header-group; }
+  .board-packet-print-copy tr { break-inside: avoid; }
+  .board-packet-print-copy h3, .board-packet-print-copy h4, .board-packet-print-copy h5 { break-after: avoid; }
+}

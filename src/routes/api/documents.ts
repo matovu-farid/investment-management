@@ -51,8 +51,8 @@ export const Route = createFileRoute('/api/documents')({
       if (!bucket) return response('Document storage is unavailable', 503)
       if (request.headers.get('content-type') !== 'application/pdf') return response('Choose a PDF file', 415)
       try {
-        const id = header(request, 'x-document-id'), title = header(request, 'x-document-title'), filename = header(request, 'x-document-filename'), source = header(request, 'x-document-source'), documentDate = header(request, 'x-document-date')
-        const document = await uploadDocument(bucket, check, actor, { id, title, filename, source, documentDate, bytes: await readBounded(request) })
+        const id = header(request, 'x-document-id'), title = header(request, 'x-document-title'), filename = header(request, 'x-document-filename'), source = header(request, 'x-document-source'), documentDate = header(request, 'x-document-date'), replacesId = header(request, 'x-document-replaces'), replacementReason = header(request, 'x-document-replacement-reason')
+        const document = await uploadDocument(bucket, check, actor, { id, title, filename, source, documentDate, replacesId, replacementReason, bytes: await readBounded(request) })
         return Response.json({ document }, { headers: { 'Cache-Control': 'private, no-store' } })
       } catch { return response('Document could not be recorded. Check the PDF and details, then retry unchanged.', 400) }
     },

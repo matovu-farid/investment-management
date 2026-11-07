@@ -2,7 +2,7 @@ const PREFIX = 'supporting-documents/'
 export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 type AdminCheck = (actor: string) => Promise<boolean>
-type Upload = { id: string; title: string; filename: string; bytes: Uint8Array; source: string; documentDate: string }
+type Upload = { id: string; title: string; filename: string; bytes: Uint8Array; source: string; documentDate: string; replacesId?: string; replacementReason?: string }
 
 async function authorize(check: AdminCheck, actor: string | null): Promise<string> {
   if (!actor || !await check(actor)) throw new Error('Unauthorized')
@@ -23,17 +23,25 @@ function date(value: string) {
 }
 function details(object: R2Object) {
   const metadata = object.customMetadata || {}
-  return { id: object.key.slice(PREFIX.length), title: metadata.title || '', filename: metadata.filename || '', source: metadata.source || '', documentDate: metadata.documentDate || '', uploadedAt: object.uploaded.toISOString(), size: object.size }
+  return { id: object.key.slice(PREFIX.length), title: metadata.title || '', filename: metadata.filename || '', source: metadata.source || '', documentDate: metadata.documentDate || '', replacesId: metadata.replacesId || '', replacementReason: metadata.replacementReason || '', recordedBy: metadata.createdBy || '', uploadedAt: object.uploaded.toISOString(), size: object.size }
 }
 
 export async function uploadDocument(bucket: R2Bucket, check: AdminCheck, actor: string | null, input: Upload) {
   const user = await authorize(check, actor)
   if (!input || typeof input !== 'object') throw new Error('Invalid document')
   const key = keyFor(input.id), title = text(input.title, 200), filename = text(input.filename, 180), source = text(input.source, 300, false), documentDate = date(input.documentDate)
+  const replacesId = input.replacesId || ''
+  const replacementReason = input.replacementReason || ''
+  if (replacesId) {
+    const priorKey = keyFor(replacesId)
+    if (key === priorKey) throw new Error('Replacement must be distinct from the previous document')
+    if (!replacementReason.trim()) throw new Error('A replacement reason is required')
+    if (!await bucket.head(priorKey)) throw new Error('Previous document not found')
+  } else if (replacementReason) throw new Error('A replacement reason requires a previous document')
   if (!/\.pdf$/i.test(filename) || !(input.bytes instanceof Uint8Array) || input.bytes.length < 5 || input.bytes.length > MAX_DOCUMENT_BYTES || ![37,80,68,70,45].every((b, i) => input.bytes[i] === b)) throw new Error('Choose a PDF file no larger than 5 MB')
   const content = new Uint8Array(input.bytes)
   const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', content))).map(n => n.toString(16).padStart(2, '0')).join('')
-  const metadata = { title, filename, source, documentDate, hash, createdBy: user }
+  const metadata = { title, filename, source, documentDate, hash, createdBy: user, ...(replacesId ? { replacesId: replacesId.toLowerCase(), replacementReason: text(replacementReason, 500) } : {}) }
   await bucket.put(key, content.buffer, { onlyIf: new Headers({ 'If-None-Match': '*' }), customMetadata: metadata, httpMetadata: { contentType: 'application/pdf' } })
   const saved = await bucket.head(key)
   if (!saved || Object.entries(metadata).some(([name, value]) => saved.customMetadata?.[name] !== value)) throw new Error('Document request already used for different details')
