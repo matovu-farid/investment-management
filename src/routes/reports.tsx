@@ -16,15 +16,16 @@ import { getSession } from '#/lib/auth.functions'
 import { reportForPeriodFn } from '#/server/reports/functions'
 import type { Fact, Report } from '#/server/reports/service'
 import { reportCsv, reportCaveats, reportSections } from '#/lib/report-export/export'
+import './report-workspace.css'
 
 export const Route = createFileRoute('/reports')({
   beforeLoad: async () => { if (!await getSession()) throw redirect({ to: '/login' }) },
   component: Reports,
 })
 
-function FactTable({ title, rows, columns, summary }: { title: string; rows: Fact[]; columns: [string, string][]; summary:boolean }) {
-  return <Card className="mt-6">
-    <CardHeader><CardTitle className="flex flex-wrap items-center gap-2">{title} {!summary&&<Badge variant="secondary">{rows.length}</Badge>}</CardTitle></CardHeader>
+function FactTable({ id, title, rows, columns, summary }: { id: string; title: string; rows: Fact[]; columns: [string, string][]; summary:boolean }) {
+  return <Card id={id} className="mt-6 report-section">
+    <CardHeader><CardTitle className="flex flex-wrap items-center gap-2"><h2>{title}</h2> {!summary&&<Badge variant="secondary">{rows.length}</Badge>}</CardTitle></CardHeader>
     <CardContent>{rows.length === 0 ? <p className="text-sm text-muted-foreground">No records for this selection.</p> : summary ? <CreditRequestTimingSummary rows={rows}/> : <> {columns.length>6&&<p className="mb-3 text-sm text-muted-foreground">Scroll horizontally to view all columns.</p>}<Table><TableHeader><TableRow>{columns.map(([key, label]) => <TableHead key={key} scope="col">{label}</TableHead>)}</TableRow></TableHeader>
         <TableBody>{rows.map((row, index) => <TableRow key={index}>{columns.map(([key]) => <TableCell key={key}>{row[key] == null ? '—' : String(row[key])}</TableCell>)}</TableRow>)}</TableBody>
       </Table></>}
@@ -51,7 +52,7 @@ function Reports() {
   }
   const caveats = report ? reportCaveats(report) : []
   return <div className="app"><header><Link to="/" className="brand" style={{ color: 'inherit', textDecoration: 'none' }}><span className="brand-mark">R</span><span>RNIG <small>INVESTMENT GROUP</small></span></Link><Link to="/" className="quiet" style={{ textDecoration: 'none' }}>Back to overview</Link></header>
-    <main className="dashboard"><p className="eyebrow">ADMINISTRATION</p><h1>Recorded activity</h1><p className="lead">Review dated records within a selected period.</p>
+    <main className="dashboard report-workspace"><p className="eyebrow">REPORTS &amp; BOARD / RECORDED ACTIVITY</p><h1>Recorded activity</h1><p className="lead">Review dated records within a selected period.</p><p><Link to="/board-packets">Create or review board-pack drafts →</Link></p>
       <Card className="mt-8"><CardHeader><CardTitle>Select a reporting period</CardTitle><CardDescription>Choose the start and end dates for the activity report.</CardDescription></CardHeader><CardContent>
         <FieldSet disabled={busy} className="mb-4 gap-0 border-0 p-0">
           <FieldLegend variant="label" className="mb-3 border-b pb-2 font-semibold">Calendar quadrimester shortcut</FieldLegend>
@@ -65,8 +66,9 @@ function Reports() {
       </CardContent></Card>
       {error && <Alert variant="destructive" className="mt-6" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}
       {report && <>{caveats.map((caveat, index) => <Alert className="mt-6" key={index}><AlertDescription>{caveat}</AlertDescription></Alert>)}
+        <Card className="mt-6"><CardHeader><CardTitle><h2>Report sections</h2></CardTitle><CardDescription>Recorded activity from {report.start} to {report.end}. Open a section to review its details.</CardDescription></CardHeader><CardContent><nav className="report-section-links" aria-label="Report sections">{reportSections.map(section => <a key={section.key} href={`#report-${section.key}`}><span>{section.title}</span><span>{(report[section.key] ?? []).length.toLocaleString('en-US')} rows</span></a>)}</nav></CardContent></Card>
         <Card className="mt-6"><CardHeader><CardTitle>Export report</CardTitle><CardDescription>CSV includes all report sections. Spreadsheet programs may change dates, leading zeroes or large numbers; import columns as text to preserve them. Protective apostrophes may appear.</CardDescription></CardHeader><CardContent><Button type="button" variant="outline" onClick={download}>Download CSV for board pack</Button></CardContent></Card>
-        {reportSections.map(section => <FactTable key={section.key} title={section.title} rows={report[section.key] ?? []} columns={section.columns} summary={section.key==='bookingAgeSummary'} />)}
+        {reportSections.map(section => <FactTable key={section.key} id={`report-${section.key}`} title={section.title} rows={report[section.key] ?? []} columns={section.columns} summary={section.key==='bookingAgeSummary'} />)}
       </>}
     </main></div>
 }

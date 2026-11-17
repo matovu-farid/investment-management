@@ -11,6 +11,8 @@ import { usePendingRequest, PendingRequestNotice } from '#/lib/pending-requests/
 import { listLendingFn } from '#/server/lending/functions'
 import { voidFulfilmentFn } from '#/server/fulfilment-void/functions'
 
+import './lending-pages-nav.css'
+
 export const Route = createFileRoute('/fulfilment-void')({
   beforeLoad: async () => { const { auth, data } = await loadRouteInParallel(async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { userId: session.user.id } }, async () => { try { return await listLendingFn() } catch { return null } }); return { ...(auth ?? {}), __parallelData: data } },
   loader: ({ context }) => context.__parallelData,
@@ -49,14 +51,15 @@ function FulfilmentVoid() {
     <p className="eyebrow">ADMINISTRATION</p><h1>Void an erroneous booking fulfilment</h1>
     <p>Mark an incorrect fulfilment as void while retaining its audit history. This action cannot be undone. It updates recorded fulfilled and remaining amounts; it does not reverse a loan or accounting entry.</p>
     {!data ? <Alert variant="destructive" role="alert"><AlertDescription>The lending register is unavailable or access could not be confirmed.</AlertDescription></Alert> : <>
+      <nav className="lending-pages-nav" aria-label="Page sections"><a href="#fulfilment-review">Review a fulfilment</a><a href="#fulfilment-history">Voided fulfilments</a></nav>
       {error && <Alert variant="destructive" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}{message && <p role="status">{message}</p>}
       <PendingRequestNotice title="Fulfilment void" pending={pending.pending} storageError={pending.storageError} disabled={busy} onRetry={() => { if (pending.pending) void send(pending.pending, false) }} onDiscard={() => setDiscardReview(true)} />
       {discardReview && <section className="record-panel" aria-label="Confirm discarding request"><p>The request may already have been recorded. Check the void history before discarding it.</p><Button type="button" disabled={busy} onClick={discard}>Discard request</Button>{' '}<Button type="button" disabled={busy} onClick={() => setDiscardReview(false)}>Keep request</Button></section>}
-      <section className="record-panel"><h2>Review a fulfilment</h2>{review ? <div role="region" aria-label="Confirm fulfilment void"><p><strong>{description(review.fulfilmentId)}</strong></p><p>Reason: {review.reason}</p><p>Confirm this fulfilment is erroneous. This cannot be undone.</p><Button type="button" disabled={busy || !pending.ready || !!pending.pending || !!pending.storageError} onClick={() => void send(review, true)}>{busy ? <SpinnerLabel>Confirm void</SpinnerLabel> : 'Confirm void'}</Button>{' '}<Button type="button" disabled={busy} onClick={() => setReview(null)}>Cancel</Button></div> : <form onSubmit={prepare} style={{ display: 'grid', gap: 12, maxWidth: 680 }}>
+      <section id="fulfilment-review" className="record-panel lending-pages-section"><h2>Review a fulfilment</h2>{review ? <div role="region" aria-label="Confirm fulfilment void"><p><strong>{description(review.fulfilmentId)}</strong></p><p>Reason: {review.reason}</p><p>Confirm this fulfilment is erroneous. This cannot be undone.</p><Button type="button" disabled={busy || !pending.ready || !!pending.pending || !!pending.storageError} onClick={() => void send(review, true)}>{busy ? <SpinnerLabel>Confirm void</SpinnerLabel> : 'Confirm void'}</Button>{' '}<Button type="button" disabled={busy} onClick={() => setReview(null)}>Cancel</Button></div> : <form onSubmit={prepare} style={{ display: 'grid', gap: 12, maxWidth: 680 }}>
         <label>Fulfilment <NativeSelect required value={fulfilmentId} onChange={e => setFulfilmentId(e.target.value)}><NativeSelectOption value="">Select a recorded fulfilment</NativeSelectOption>{data.fulfilments.filter(f => !f.voidedAt).map(f => <NativeSelectOption key={f.id} value={f.id}>{description(f.id)}</NativeSelectOption>)}</NativeSelect></label>
         <label>Reason <Textarea required maxLength={450} value={reason} onChange={e => setReason(e.target.value)} /></label><Button disabled={busy || !fulfilmentId || !pending.ready || !!pending.pending || !!pending.storageError}>Review void</Button>
       </form>}</section>
-      <section className="record-panel"><h2>Voided fulfilments</h2>{!data.fulfilments.some(f => f.voidedAt) ? <p>No fulfilments have been voided.</p> : <ul>{data.fulfilments.filter(f => f.voidedAt).map(f => <li key={f.id}>{description(f.id)} · voided {f.voidedAt} · {f.voidReason}</li>)}</ul>}</section>
+      <section id="fulfilment-history" className="record-panel lending-pages-section"><h2>Voided fulfilments</h2>{!data.fulfilments.some(f => f.voidedAt) ? <p>No fulfilments have been voided.</p> : <ul>{data.fulfilments.filter(f => f.voidedAt).map(f => <li key={f.id}>{description(f.id)} · voided {f.voidedAt} · {f.voidReason}</li>)}</ul>}</section>
     </>}
   </main></div>
 }

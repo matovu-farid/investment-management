@@ -103,7 +103,7 @@ function DatePickerInput({ type: _type, value, defaultValue, onChange, onFocus, 
         if (typeof ref === 'function') ref(node)
         else if (ref) ref.current = node
       }} type="text" value={draft} placeholder={props.placeholder ?? 'dd/mm/yyyy'} required={required} disabled={disabled} readOnly={_readOnly}
-        className={cn('h-9 pr-11 tabular-nums', props.className)}
+        className={cn('pr-11 tabular-nums', props.className)}
         aria-haspopup="dialog" aria-readonly={_readOnly || undefined}
         onFocus={event => { setEditing(true); onFocus?.(event) }}
         onChange={event => editDisplay(event.currentTarget.value, event.currentTarget)}

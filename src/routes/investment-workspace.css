@@ -1,0 +1,23 @@
+.investment-workspace-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin: 1.25rem 0;
+}
+.investment-workspace-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: .6rem .85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--primary);
+  text-decoration: none;
+  font-size: .875rem;
+  font-weight: 600;
+}
+.investment-workspace-nav a:hover { background: var(--accent); }
+.investment-workspace-nav a:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.investment-workspace-section { scroll-margin-top: 1.5rem; }
+.investment-workspace-search { display: grid; gap: .5rem; max-width: 30rem; margin-bottom: 1rem; }

@@ -1,0 +1,34 @@
+.import-workflow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem 1rem;
+  margin: 1.5rem 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted-foreground);
+  font-size: .875rem;
+}
+.import-workflow li {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  line-height: 1.35;
+}
+.import-workflow li span {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--card);
+  font-size: .75rem;
+  font-weight: 600;
+}
+.import-workflow li[aria-current='step'] { color: var(--foreground); font-weight: 600; }
+.import-workflow li[aria-current='step'] span { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
+.import-preview-status { margin: 0; color: var(--muted-foreground); font-size: .875rem; }
+.import-preview-status[data-conflicts='true'] { color: var(--destructive); }
+.import-workspace-card { scroll-margin-top: 1.5rem; }
+@media (max-width: 480px) { .import-workflow { gap: .75rem; } }

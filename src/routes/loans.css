@@ -1,6 +1,18 @@
 .lending-notice { margin: 32px 0; }
 .lending-card { margin-top: 32px; }
 .lending h2 { margin: 0; }
+.lending-register { margin-top: 32px; padding: clamp(18px, 2.5vw, 28px); border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.lending-register-heading { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.lending-register-heading h2 { font-size: 1.5rem; }
+.lending-register-heading p:not(.eyebrow), .lending-entry-description { margin: 7px 0 0; color: var(--muted-foreground); font-size: .9rem; line-height: 1.5; }
+.lending-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.lending-register-tools { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; margin: 24px 0 16px; }
+.lending-register-tools label { display: grid; gap: 8px; width: min(100%, 420px); color: var(--foreground); font-size: .875rem; font-weight: 600; }
+.lending-register-tools p { margin: 0; color: var(--muted-foreground); font-size: .875rem; }
+.lending-empty { margin: 0; padding: 24px; border: 1px dashed var(--border); border-radius: var(--radius); color: var(--muted-foreground); }
+.lending-entry { scroll-margin-top: 24px; }
+.lending-entry-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.lending-card-content[hidden] { display: none; }
 .lending-switch { display: flex; gap: 8px; margin: 18px 0 24px; }
 .lending-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; width: 100%; }
 .lending-form label { display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
@@ -13,4 +25,13 @@
 .lending-table { overflow-x: auto; background: var(--card); border: 1px solid var(--border); border-radius: 7px; }
 .lending-table table { width: 100%; min-width: 620px; text-align: left; }
 .lending-table th, .lending-table td { vertical-align: top; white-space: pre-wrap; }
+.lending-mobile-list { display: none; }
+.lending-mobile-record { padding: 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.lending-mobile-record h3 { margin: 0 0 14px; font-size: 1rem; }
+.lending-mobile-record dl { display: grid; gap: 10px; margin: 0; }
+.lending-mobile-record dl div { display: grid; grid-template-columns: minmax(90px, .8fr) minmax(0, 1.2fr); gap: 12px; font-size: .875rem; }
+.lending-mobile-record dt { color: var(--muted-foreground); }
+.lending-mobile-record dd { margin: 0; overflow-wrap: anywhere; }
+.lending-mobile-record-actions { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 18px; font-size: .875rem; }
 @media (max-width: 760px) { .lending-form { grid-template-columns: 1fr; } .lending-full { grid-column: auto; } }
+@media (max-width: 540px) { .lending-register { padding: 18px; } .lending-actions { width: 100%; } .lending-actions a { flex: 1 1 auto; } .lending-entry-heading { align-items: stretch; } .lending-register > .lending-table { display: none; } .lending-mobile-list { display: grid; gap: 12px; } }

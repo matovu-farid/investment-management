@@ -1,0 +1,26 @@
+.ledger-workspace-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin: 1.25rem 0;
+}
+.ledger-workspace-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: .55rem .8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--primary);
+  background: var(--card);
+  font-size: .875rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.ledger-workspace-nav a:hover { background: var(--accent); }
+.ledger-workspace-nav a:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.ledger-filter { display: grid; gap: .5rem; max-width: 30rem; margin: 1.25rem 0 .5rem; font-weight: 600; }
+.ledger-filter-note { margin-bottom: 1rem; color: var(--muted-foreground); font-size: .875rem; }
+#trial-accounts, #trial-totals, #activity-summary, #activity-lines,
+#cash-record, #cash-period, #cash-activity, #cash-void { scroll-margin-top: 1.5rem; }
+@media print { .ledger-workspace-nav, .ledger-filter { display: none !important; } }

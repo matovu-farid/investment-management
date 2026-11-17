@@ -6,11 +6,11 @@ function Table({ className, containerProps, ...props }: React.ComponentProps<"ta
     <div
       {...containerProps}
       data-slot="table-container"
-      className={cn("relative w-full overflow-x-auto", containerProps?.className)}
+      className={cn("relative w-full overflow-x-auto rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring", containerProps?.className)}
     >
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
+        className={cn("w-full border-collapse caption-bottom text-sm", className)}
         {...props}
       />
     </div>

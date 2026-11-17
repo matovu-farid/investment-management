@@ -8,6 +8,8 @@ import { getSession } from '#/lib/auth.functions'
 import { accountActivityFn, accountActivityOptionsFn } from '#/server/account-activity/functions'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Button } from '#/components/ui/button'
+import { Input } from '#/components/ui/input'
+import './ledger-workspace.css'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#/components/ui/card'
 import { Field, FieldGroup, FieldLabel } from '#/components/ui/field'
 import { NativeSelect, NativeSelectOption } from '#/components/ui/native-select'
@@ -30,6 +32,9 @@ function AccountActivity() {
   const [result, setResult] = useState<Result | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
+  const term = search.trim().toLocaleLowerCase()
+  const visibleLines = result?.lines.filter(line => !term || [line.effectiveDate, line.description, line.sourceType, line.sourceId ?? '', line.entryId].some(value => value.toLocaleLowerCase().includes(term))) ?? []
 
   async function load(e: React.FormEvent) {
     e.preventDefault()
@@ -48,7 +53,7 @@ function AccountActivity() {
   }
 
   return <div className="app"><header><Link to="/" className="brand" style={{ color: 'inherit', textDecoration: 'none' }}><span className="brand-mark">R</span><span>RNIG <small>INVESTMENT GROUP</small></span></Link><Link to="/" className="quiet">Back to overview</Link></header><main className="dashboard">
-    <p className="eyebrow">ADMINISTRATION</p><h1>Account activity</h1>
+    <p className="eyebrow">ACCOUNTING / ACCOUNT ACTIVITY</p><h1>Account activity</h1>
     <p>Review posted journal lines for one account and an inclusive date range. Select accounts according to the organisation’s approved mappings; this report does not classify income or cash.</p>
     {!available ? <Alert variant="destructive" className="mt-6" role="alert"><AlertDescription>Accounts are unavailable or access could not be confirmed. Reload and try again.</AlertDescription></Alert> : <>
       {!accounts.length && <Alert className="mt-6"><AlertDescription>No ledger accounts are available. Add an account in the accounting ledger first.</AlertDescription></Alert>}
@@ -59,14 +64,14 @@ function AccountActivity() {
         <Button type="submit" disabled={busy || !accounts.length}>{busy ? <SpinnerLabel>View account activity</SpinnerLabel> : 'View account activity'}</Button>
       </FieldGroup></form></CardContent></Card>
       {error && <Alert variant="destructive" className="mt-6" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}
-      {result && <section aria-labelledby="statement-heading">
+      {result && <section aria-labelledby="statement-heading"><nav className="ledger-workspace-nav" aria-label="Account activity sections"><a href="#activity-summary">Opening and closing</a><a href="#activity-lines">Posted lines</a></nav>
         <Alert className="mt-6"><AlertDescription>{result.startDate} to {result.endDate}, inclusive · {result.account.currency} · all amounts in integer minor units. Opening includes posted entries before the start date; closing includes entries through the end date. Snapshot taken {result.snapshotAt} UTC: this reflects records available then, not necessarily those known at the period end. Reversal entries appear on their effective dates; reversal references include only entries through the selected end date.</AlertDescription></Alert>
-        <Card className="mt-6"><CardHeader><CardTitle id="statement-heading">{result.account.code} — {result.account.name}</CardTitle><CardDescription>Opening, period movement and closing activity.</CardDescription></CardHeader><CardContent>
+        <Card id="activity-summary" className="mt-6"><CardHeader><CardTitle id="statement-heading">{result.account.code} — {result.account.name}</CardTitle><CardDescription>Opening, period movement and closing activity.</CardDescription></CardHeader><CardContent>
         <Button type="button" variant="outline" onClick={download}>Download account activity CSV</Button>
         <p className="text-muted-foreground mt-3 text-sm">Import CSV columns as text to preserve account codes and large amounts. Protective apostrophes may appear.</p>
         <Table><TableHeader><TableRow>{['Position', 'Debits', 'Credits', 'Net debit', 'Net credit'].map(label => <TableHead key={label} scope="col">{label}</TableHead>)}</TableRow></TableHeader><TableBody>{([['Opening', result.opening], ['Period movement', result.period], ['Closing', result.closing]] as const).map(([label, position]) => <TableRow key={label}><TableHead scope="row">{label}</TableHead>{[position.debits, position.credits, position.netDebit, position.netCredit].map((value, i) => <TableCell key={i}>{amount(value)}</TableCell>)}</TableRow>)}</TableBody></Table>
         </CardContent></Card>
-        <Card className="mt-6"><CardHeader><CardTitle>Posted lines</CardTitle><CardDescription>Source and reversal references are shown for each journal line.</CardDescription></CardHeader><CardContent>{!result.lines.length ? <p>No posted lines in this period.</p> : <Table><TableHeader><TableRow>{['Date', 'Journal and description', 'Source', 'Reversal', 'Debit', 'Credit'].map(label => <TableHead key={label} scope="col">{label}</TableHead>)}</TableRow></TableHeader><TableBody>{result.lines.map(line => <TableRow key={line.id}><TableCell>{line.effectiveDate}</TableCell><TableCell>{formatJournalDescription(line.sourceType, line.description)}<br /><small>Journal {line.entryId}</small></TableCell><TableCell>{line.sourceType}{line.sourceId ? ` · ${line.sourceId}` : ''}</TableCell><TableCell>{line.reversesEntryId ? `Reverses ${line.reversesEntryId}` : ''}{line.reversesEntryId && line.reversedById ? '; ' : ''}{line.reversedById ? `Reversed by ${line.reversedById}` : ''}</TableCell><TableCell>{line.side === 'debit' ? amount(line.amountMinor) : '—'}</TableCell><TableCell>{line.side === 'credit' ? amount(line.amountMinor) : '—'}</TableCell></TableRow>)}</TableBody></Table>}</CardContent></Card>
+        <Card id="activity-lines" className="mt-6"><CardHeader><CardTitle>Posted lines</CardTitle><CardDescription>Source and reversal references are shown for each journal line.</CardDescription></CardHeader><CardContent><label className="ledger-filter" htmlFor="activity-line-search">Search posted lines<Input id="activity-line-search" type="search" placeholder="Description, source, journal or date" value={search} onChange={e => setSearch(e.target.value)} /></label><p className="ledger-filter-note" role="status">Showing {visibleLines.length} of {result.lines.length} lines. Summary and CSV include all lines.</p>{!result.lines.length ? <p>No posted lines in this period.</p> : !visibleLines.length ? <p>No posted lines match this search.</p> : <Table><TableHeader><TableRow>{['Date', 'Journal and description', 'Source', 'Reversal', 'Debit', 'Credit'].map(label => <TableHead key={label} scope="col">{label}</TableHead>)}</TableRow></TableHeader><TableBody>{visibleLines.map(line => <TableRow key={line.id}><TableCell>{line.effectiveDate}</TableCell><TableCell>{formatJournalDescription(line.sourceType, line.description)}<br /><small>Journal {line.entryId}</small></TableCell><TableCell>{line.sourceType}{line.sourceId ? ` · ${line.sourceId}` : ''}</TableCell><TableCell>{line.reversesEntryId ? `Reverses ${line.reversesEntryId}` : ''}{line.reversesEntryId && line.reversedById ? '; ' : ''}{line.reversedById ? `Reversed by ${line.reversedById}` : ''}</TableCell><TableCell>{line.side === 'debit' ? amount(line.amountMinor) : '—'}</TableCell><TableCell>{line.side === 'credit' ? amount(line.amountMinor) : '—'}</TableCell></TableRow>)}</TableBody></Table>}</CardContent></Card>
       </section>}
     </>}
   </main></div>

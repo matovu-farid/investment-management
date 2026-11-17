@@ -1,0 +1,22 @@
+.lending-pages-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin: 1.25rem 0;
+}
+.lending-pages-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: .55rem .8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--primary);
+  font-size: .875rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.lending-pages-nav a:hover { background: var(--accent); }
+.lending-pages-nav a:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.lending-pages-section { scroll-margin-top: 1.5rem; }

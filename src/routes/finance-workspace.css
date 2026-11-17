@@ -1,0 +1,9 @@
+.finance-workspace-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin: 1.25rem 0;
+}
+.finance-workspace-nav a { min-height: 2.5rem; }
+.finance-workspace-nav a:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+@media print { .finance-workspace-nav { display: none !important; } }

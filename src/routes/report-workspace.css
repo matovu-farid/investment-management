@@ -1,0 +1,21 @@
+.report-workspace .report-section-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: .5rem;
+}
+.report-workspace .report-section-links a {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .7rem .85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--foreground);
+  text-decoration: none;
+}
+.report-workspace .report-section-links a:hover { background: var(--accent); }
+.report-workspace .report-section-links a:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.report-workspace .report-section-links a span:last-child { color: var(--muted-foreground); font-size: .8rem; white-space: nowrap; }
+.report-workspace .report-section { scroll-margin-top: 1.5rem; }
+.report-workspace h2 { margin: 0; font: inherit; }

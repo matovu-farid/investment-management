@@ -1,0 +1,25 @@
+.lending-workspace-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin: 1.25rem 0 .5rem;
+}
+.lending-workspace-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: .55rem .85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--primary);
+  font-size: .875rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.lending-workspace-nav a:hover { background: var(--accent); }
+.lending-workspace-nav a:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.lending-workspace-section { scroll-margin-top: 1rem; }
+@media (max-width: 700px) {
+  .lending-workspace-nav a { flex: 1 1 auto; justify-content: center; }
+}

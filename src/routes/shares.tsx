@@ -1,3 +1,4 @@
+import { matchesShareSearch } from '#/lib/share-register-search'
 import { SpinnerLabel } from '#/components/ui/spinner'
 import { loadRouteInParallel } from '#/lib/parallel-route-loading'
 import { Checkbox } from "#/components/ui/checkbox.tsx"
@@ -25,6 +26,8 @@ export const Route = createFileRoute('/shares')({
 function Shares() {
   const { data, available } = Route.useLoaderData(), router = useRouter(), {owner} = Route.useRouteContext()
   const [holder, setHolder] = useState(''), [type, setType] = useState('opening'), [shares, setShares] = useState(''), [date, setDate] = useState(''), [reference, setReference] = useState(''), [notes, setNotes] = useState('')
+  const [search, setSearch] = useState('')
+  const visibleEvents = (data?.events ?? []).filter(event => matchesShareSearch(search, [event.eventDate, event.holderName, event.eventType, event.shares, event.reference, event.notes, event.voidReason]))
   const [jointName, setJointName] = useState(''), [selected, setSelected] = useState<string[]>([])
   const [jointReview, setJointReview] = useState<{idempotencyKey:string;name:string;members:{id:string;memberNumber:string;fullName:string}[]} | null>(null)
   const eventPending=usePendingRequest<{idempotencyKey:string;memberId:string|null;jointHoldingId:string|null;eventType:string;shares:number;eventDate:string;reference:string;notes:string}>(owner,'share-event')
@@ -40,8 +43,11 @@ function Shares() {
     {!available || !data ? <Alert role="alert"><AlertDescription>This register is unavailable or you do not have permission to view it.</AlertDescription></Alert> : <div className="flex flex-col gap-6">
       <Alert><AlertDescription>Events record the facts provided. They do not execute a transfer, settle a sale, or calculate a valuation.</AlertDescription></Alert>
       {error && <Alert variant="destructive" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}{message && <Alert role="status"><AlertDescription>{message}</AlertDescription></Alert>}
+      <Card><CardHeader><CardTitle>Joint holdings</CardTitle></CardHeader><CardContent>{data.holdings.length === 0 ? <p>No joint holdings recorded yet.</p> : <ul>{data.holdings.map(h => <li key={h.id}><strong>{h.name}</strong> — {h.members}</li>)}</ul>}</CardContent></Card>
+      <Card><CardHeader><CardTitle>Recorded events ({data.events.length})</CardTitle></CardHeader><CardContent><label htmlFor="share-event-search" className="flex max-w-lg flex-col gap-2">Search share events<Input id="share-event-search" type="search" placeholder="Search holder, date, type or reference" value={search} onChange={e=>setSearch(e.target.value)}/></label><p role="status" className="mt-3 text-sm text-muted-foreground">Showing {visibleEvents.length} of {data.events.length} events</p>{data.events.length===0 ? <p>No share events recorded yet.</p> : visibleEvents.length===0 ? <p>No share events match this search.</p> : <Table><TableHeader><TableRow>{['Date','Holder','Event','Shares','Reference','Notes','Correction status'].map(x=><TableHead key={x} scope="col">{x}</TableHead>)}</TableRow></TableHeader><TableBody>{visibleEvents.map(event=><TableRow key={event.id}>{[event.eventDate,event.holderName,event.eventType,event.shares,event.reference || '—',event.notes || '—',event.voidedAt ? `Voided ${event.voidedAt} UTC · ${event.voidReason}` : 'Recorded'].map((x,i)=><TableCell key={i}>{x}</TableCell>)}</TableRow>)}</TableBody></Table>}</CardContent></Card>
+      <nav aria-label="Share tools" className="flex flex-wrap gap-3"><Button asChild variant="outline"><a href="#record-share-event">Record a share event</a></Button><Button asChild variant="outline"><a href="#add-joint-holding">Add a joint holding</a></Button></nav>
       <PendingRequestNotice title="Share event" pending={eventPending.pending} storageError={eventPending.storageError} disabled={busy} onRetry={()=>eventPending.pending&&void sendEvent(eventPending.pending,false)} onDiscard={()=>discardPending(eventPending.discard)}/>
-      <Card><CardHeader><CardTitle>Record a share event</CardTitle><CardDescription>Enter the recorded change for a member or joint holding.</CardDescription></CardHeader><CardContent>
+      <Card id="record-share-event"><CardHeader><CardTitle>Record a share event</CardTitle><CardDescription>Enter the recorded change for a member or joint holding.</CardDescription></CardHeader><CardContent>
         <form onSubmit={record} className="max-w-xl"><FieldGroup>
           <Field><FieldLabel htmlFor="share-holder">Holder</FieldLabel><NativeSelect id="share-holder" required value={holder} onChange={e=>setHolder(e.target.value)}><option value="">Select a holder</option><optgroup label="Members">{data.members.map(m=><option key={m.id} value={`member:${m.id}`}>{m.fullName} ({m.memberNumber})</option>)}</optgroup><optgroup label="Joint holdings">{data.holdings.map(h=><option key={h.id} value={`joint:${h.id}`}>{h.name}</option>)}</optgroup></NativeSelect></Field>
           <Field><FieldLabel htmlFor="share-type">Event type</FieldLabel><NativeSelect id="share-type" value={type} onChange={e=>setType(e.target.value)}>{['opening','issue','bonus','purchase','sale','exit','adjustment'].map(t=><option key={t} value={t}>{t[0].toUpperCase()+t.slice(1)}</option>)}</NativeSelect></Field>
@@ -53,15 +59,14 @@ function Shares() {
         </FieldGroup></form>
       </CardContent></Card>
       <PendingRequestNotice title="Joint holding" pending={jointPending.pending} storageError={jointPending.storageError} disabled={busy} onRetry={()=>jointPending.pending&&void sendJoint(jointPending.pending,false)} onDiscard={()=>discardPending(jointPending.discard)}/>
-      <Card><CardHeader><CardTitle>Add a joint holding</CardTitle><CardDescription>Select at least two active members and review their identities. Linked members may see joint holding records. This does not assign ownership percentages.</CardDescription></CardHeader><CardContent>
+      <Card id="add-joint-holding"><CardHeader><CardTitle>Add a joint holding</CardTitle><CardDescription>Select at least two active members and review their identities. Linked members may see joint holding records. This does not assign ownership percentages.</CardDescription></CardHeader><CardContent>
       {jointReview ? <div aria-label="Review joint holding" className="flex flex-col gap-4"><h3>Review before adding</h3><p>Holding: <strong>{jointReview.name}</strong></p><ul>{jointReview.members.map(m=><li key={m.id}>{m.fullName} · {m.memberNumber} · member {m.id}</li>)}</ul><p>Verify each person before adding this joint holding.</p><div className="flex flex-wrap gap-2"><Button type="button" disabled={busy || !jointPending.ready || !!jointPending.pending || !!jointPending.storageError} onClick={()=>void sendJoint(jointReview,true)}>Confirm joint holding</Button><Button type="button" variant="outline" disabled={busy} onClick={()=>setJointReview(null)}>Edit</Button></div></div> : <form onSubmit={joint} className="max-w-xl"><FieldGroup>
         <Field><FieldLabel htmlFor="joint-name">Holding name</FieldLabel><Input id="joint-name" required maxLength={200} value={jointName} onChange={e=>setJointName(e.target.value)}/></Field>
         <FieldSet><FieldLegend>Active members</FieldLegend>{data.members.filter(m=>m.status==='active').map(m=><label key={m.id} className="flex items-center gap-2"><Checkbox checked={selected.includes(m.id)} onCheckedChange={nextChecked=>setSelected((nextChecked===true)?[...selected,m.id]:selected.filter(id=>id!==m.id))}/> {m.fullName} ({m.memberNumber})</label>)}</FieldSet>
         <Button disabled={busy || selected.length < 2 || !jointPending.ready || !!jointPending.pending || !!jointPending.storageError}>Review joint holding</Button>
       </FieldGroup></form>}
       </CardContent></Card>
-      <Card><CardHeader><CardTitle>Joint holdings</CardTitle></CardHeader><CardContent>{data.holdings.length === 0 ? <p>No joint holdings recorded yet.</p> : <ul>{data.holdings.map(h => <li key={h.id}><strong>{h.name}</strong> — {h.members}</li>)}</ul>}</CardContent></Card>
-      <Card><CardHeader><CardTitle>Recorded events</CardTitle></CardHeader><CardContent>{data.events.length===0 ? <p>No share events recorded yet.</p> : <Table><TableHeader><TableRow>{['Date','Holder','Event','Shares','Reference','Notes','Correction status'].map(x=><TableHead key={x} scope="col">{x}</TableHead>)}</TableRow></TableHeader><TableBody>{data.events.map(event=><TableRow key={event.id}>{[event.eventDate,event.holderName,event.eventType,event.shares,event.reference || '—',event.notes || '—',event.voidedAt ? `Voided ${event.voidedAt} UTC · ${event.voidReason}` : 'Recorded'].map((x,i)=><TableCell key={i}>{x}</TableCell>)}</TableRow>)}</TableBody></Table>}</CardContent></Card>
+
     </div>}
   </main></div>
 }
