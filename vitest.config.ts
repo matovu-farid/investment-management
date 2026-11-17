@@ -1,2 +1,2 @@
 import { defineConfig } from "vitest/config"
-export default defineConfig({ test: { include: ["tests/{investments,reports}/**/*.test.ts"] } })
+export default defineConfig({ test: { include: ["tests/{investments,reports}/**/*.test.ts"], exclude: ["tests/reports/booking-age.test.ts"] } })

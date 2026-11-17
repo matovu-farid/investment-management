@@ -1,3 +1,4 @@
+import { SpinnerLabel } from '#/components/ui/spinner'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { authClient } from '#/lib/auth-client'
@@ -38,7 +39,7 @@ function ForgotPassword() {
       <p>Enter your account email address and we’ll send a reset link if the account exists.</p>
       <form method="post" onSubmit={submit}><FieldGroup><Field><FieldLabel htmlFor="recovery-email">Email address</FieldLabel><Input id="recovery-email" type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} disabled={busy} /></Field>
       {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-      <Button type="submit" disabled={!ready || busy}>{busy ? 'Requesting…' : 'Send reset link'}</Button></FieldGroup></form>
+      <Button type="submit" disabled={!ready || busy}>{busy ? <SpinnerLabel>Send reset link</SpinnerLabel> : 'Send reset link'}</Button></FieldGroup></form>
     </>}
     <p className="help"><Link to="/login">Back to sign in</Link></p>
   </div></main>

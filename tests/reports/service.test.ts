@@ -20,6 +20,6 @@ describe('period overview', () => {
   it('passes a valid inclusive four-month period to the repository', async () => {
     const r = repo()
     expect(await reportForPeriod(r, 'admin', { start: '2026-01-01', end: '2026-04-30' })).toMatchObject({ start: '2026-01-01', end: '2026-04-30' })
-    expect(r.forPeriod).toHaveBeenCalledWith('2026-01-01', '2026-04-30')
+    expect(r.forPeriod).toHaveBeenCalledWith('2026-01-01', '2026-04-30', 'admin')
   })
 })

@@ -6,7 +6,7 @@ import { postJournal } from '../../src/server/accounting/posting.ts'
 
 function fixture() {
   const db = new DatabaseSync(':memory:'); db.exec('PRAGMA foreign_keys=ON')
-  for (const file of ['0001_auth.sql','0001_ledger.sql','0003_roles.sql','0012_reversal_chronology.sql']) db.exec(readFileSync(`migrations/${file}`, 'utf8'))
+  for (const file of ['0001_auth.sql','0001_ledger.sql','0003_roles.sql','0012_reversal_chronology.sql','0069_ledger_authorization.sql']) db.exec(readFileSync(`migrations/${file}`, 'utf8'))
   db.exec(`INSERT INTO "user" (id,name,email,createdAt,updatedAt) VALUES ('u','Admin','a@example.org',1,1); INSERT INTO app_user_roles (user_id,role,granted_by) VALUES ('u','admin','bootstrap'); INSERT INTO ledger_accounts(id,code,name,currency) VALUES ('cash','100','Cash','UGX'),('loan','200','Loans','UGX'),('usd','300','USD','USD');`)
   type Statement = { query: string; values: unknown[]; bind: (...v: unknown[]) => Statement; first: () => Promise<unknown>; all: () => Promise<{results: unknown[]}> }
   const adapter = {
@@ -46,4 +46,23 @@ test('rejects a reversal dated before the original journal', async () => {
   const original = await postJournal(adapter, 'u', {...input, effectiveDate:'2026-06-01'})
   await assert.rejects(postJournal(adapter, 'u', {...input, effectiveDate:'2026-01-01', sourceType:'reversal', sourceId:'early', reversesEntryId:original.id, lines:[{accountId:'loan',side:'credit',amountMinor:100},{accountId:'cash',side:'debit',amountMinor:100}]}), /before/i)
   db.close()
+})
+
+test('role revocation before the posting batch rolls back manual journals and reversals', async () => {
+  for (const isReversal of [false, true]) {
+    const {db, adapter} = fixture()
+    const original = isReversal ? await postJournal(adapter, 'u', {...input, sourceType: 'manual'}) : null
+    const batch = adapter.batch.bind(adapter)
+    adapter.batch = async statements => {
+      db.prepare("DELETE FROM app_user_roles WHERE user_id='u'").run()
+      return batch(statements)
+    }
+    const request = isReversal
+      ? {...input, sourceType:'manual-reversal', sourceId:'reversal', reversesEntryId:original!.id, lines:[{accountId:'loan',side:'credit',amountMinor:100},{accountId:'cash',side:'debit',amountMinor:100}]}
+      : {...input, sourceType:'manual'}
+    await assert.rejects(postJournal(adapter, 'u', request), /unauthorized/i)
+    assert.equal((db.prepare('SELECT count(*) AS n FROM journal_entries').get() as {n:number}).n, isReversal ? 1 : 0)
+    assert.equal((db.prepare('SELECT count(*) AS n FROM journal_lines').get() as {n:number}).n, isReversal ? 2 : 0)
+    db.close()
+  }
 })

@@ -2,16 +2,18 @@ import {test} from 'node:test'
 import {strict as assert} from 'node:assert'
 import {DatabaseSync} from 'node:sqlite'
 import {readFileSync} from 'node:fs'
-import {issueInvitation as issueRaw,claimInvitation,revokeInvitation,listInvitations} from '../../src/server/invitations/service.ts'
+import {issueInvitation as issueRaw,issueAndDeliverInvitation,issueStaffInvitation,revokeStaffInvitation,claimInvitation,revokeInvitation,listInvitations} from '../../src/server/invitations/service.ts'
 import {verifyPassword} from 'better-auth/crypto'
 function fixture(){
  const db=new DatabaseSync(':memory:'); db.exec('PRAGMA foreign_keys=ON'); for(const f of ['0001_auth.sql','0002_domain.sql','0003_roles.sql','0011_member_links.sql','0022_member_link_requests.sql','0025_invitations.sql','0062_invitation_review.sql'])db.exec(readFileSync(`migrations/${f}`,'utf8'))
  db.exec(`INSERT INTO "user"(id,name,email,createdAt,updatedAt) VALUES ('admin','Admin','admin@example.test',1,1),('existing','Existing','Mixed@Example.test',1,1); INSERT INTO app_user_roles(user_id,role,granted_by) VALUES ('admin','admin','bootstrap'); INSERT INTO members(id,member_number,full_name,status,created_by) VALUES ('m1','1','One','active','admin'),('m2','2','Two','active','admin'),('m3','3','Inactive','inactive','admin')`)
  type S={q:string;v:any[];bind:(...v:any[])=>S;first:()=>Promise<any>;run:()=>Promise<any>;all:()=>Promise<any>}
- const adapter={prepare(q:string):S{return {q,v:[],bind(...v){this.v=v;return this},async first(){return db.prepare(this.q).get(...this.v)??null},async run(){const r=db.prepare(this.q).run(...this.v);return {meta:{changes:Number(r.changes)}}},async all(){return {results:db.prepare(this.q).all(...this.v)}}}},async batch(stmts:S[]){db.exec('BEGIN');try{const r=stmts.map(s=>({results:db.prepare(s.q).all(...s.v)}));db.exec('COMMIT');return r}catch(e){db.exec('ROLLBACK');throw e}}} as unknown as D1Database
- return {db,adapter}
+ let revokeAt=''
+ const adapter={prepare(q:string):S{return {q,v:[],bind(...v){this.v=v;return this},async first(){if(revokeAt&&this.q.includes(revokeAt)){revokeAt='';db.exec("DELETE FROM app_user_roles WHERE user_id='admin'")}return db.prepare(this.q).get(...this.v)??null},async run(){const r=db.prepare(this.q).run(...this.v);return {meta:{changes:Number(r.changes)}}},async all(){return {results:db.prepare(this.q).all(...this.v)}}}},async batch(stmts:S[]){db.exec('BEGIN');try{const r=stmts.map(s=>({results:db.prepare(s.q).all(...s.v)}));db.exec('COMMIT');return r}catch(e){db.exec('ROLLBACK');throw e}}} as unknown as D1Database
+ return {db,adapter,revokeOn:(q:string)=>{revokeAt=q}}
 }
 async function issueInvitation(db:D1Database,actor:string|null,v:{memberId:string;email:string}){const names:Record<string,[string,string]>={m1:['One','1'],m2:['Two','2'],m3:['Inactive','3']};return issueRaw(db,actor,{...v,expectedMemberName:names[v.memberId][0],expectedMemberNumber:names[v.memberId][1]})}
+test('invitation token is withheld if administrator access is revoked before confirmation',async()=>{const {db,adapter,revokeOn}=fixture();revokeOn('SELECT expires_at AS expiresAt FROM member_invitations WHERE id=?');await assert.rejects(issueInvitation(adapter,'admin',{memberId:'m1',email:'test@example.test'}));assert.equal((db.prepare('SELECT count(*) AS n FROM member_invitations').get() as {n:number}).n,1);db.close()})
 test('only administrators issue invitations for eligible members and normalized unused emails',async()=>{const {db,adapter}=fixture();await assert.rejects(issueInvitation(adapter,null,{memberId:'m1',email:'x@example.test'}));await assert.rejects(issueInvitation(adapter,'admin',{memberId:'m3',email:'x@example.test'}));await assert.rejects(issueInvitation(adapter,'admin',{memberId:'m1',email:'mixed@example.test'}));const invite=await issueInvitation(adapter,'admin',{memberId:'m1',email:'USER@example.test'});assert.match(invite.token,/^[a-f0-9]{64}$/);assert.equal((db.prepare('SELECT email FROM member_invitations WHERE id=?').get(invite.id) as any).email,'user@example.test');assert.equal(JSON.stringify(db.prepare('SELECT * FROM member_invitations').get()).includes(invite.token),false);await assert.rejects(issueInvitation(adapter,'admin',{memberId:'m1',email:'second@example.test'}));await assert.rejects(issueInvitation(adapter,'admin',{memberId:'m2',email:'user@example.test'}));await assert.rejects(issueInvitation(adapter,'admin',{memberId:'m2',email:'bad space@example.test'}));const list=await listInvitations(adapter,'admin');assert.equal(list.invitations[0].status,'pending');assert.equal(JSON.stringify(list).includes(invite.token),false);db.close()})
 test('one claim creates linked Better Auth credentials atomically and cannot replay',async()=>{const {db,adapter}=fixture();const i=await issueInvitation(adapter,'admin',{memberId:'m1',email:'u@example.test'});await claimInvitation(adapter,{token:i.token,password:'Long-password-2026!'},'127.0.0.1');const u=db.prepare('SELECT * FROM "user" WHERE email=?').get('u@example.test') as any;const a=db.prepare('SELECT * FROM "account" WHERE userId=?').get(u.id) as any;assert.equal(a.providerId,'credential');assert.equal(a.accountId,u.id);assert.equal(await verifyPassword({hash:a.password,password:'Long-password-2026!'}),true);assert.equal((db.prepare('SELECT member_id FROM member_user_links WHERE user_id=?').get(u.id) as any).member_id,'m1');await assert.rejects(claimInvitation(adapter,{token:i.token,password:'Long-password-2026!'},'127.0.0.1'));db.close()})
 test('revocation, expiration, inactive members and duplicate emails cannot create partial account',async()=>{const {db,adapter}=fixture();const i=await issueInvitation(adapter,'admin',{memberId:'m1',email:'u@example.test'});await revokeInvitation(adapter,'admin',{id:i.id});await assert.rejects(claimInvitation(adapter,{token:i.token,password:'Long-password-2026!'},'127.0.0.1'));const j=await issueInvitation(adapter,'admin',{memberId:'m2',email:'v@example.test'});db.exec("UPDATE members SET status='inactive' WHERE id='m2'");await assert.rejects(claimInvitation(adapter,{token:j.token,password:'Long-password-2026!'},'127.0.0.1'));assert.equal((db.prepare('SELECT count(*) n FROM member_invitation_claims').get() as any).n,0);assert.equal((db.prepare('SELECT count(*) n FROM "user"').get() as any).n,2);db.close()})
@@ -28,3 +30,64 @@ test('rejects stale identity at issuance and claim, retaining reviewed evidence'
 test('pending legacy invitations require reissue; claimed history remains',()=>{const db=new DatabaseSync(':memory:');db.exec('PRAGMA foreign_keys=ON');for(const f of ['0001_auth.sql','0002_domain.sql','0003_roles.sql','0011_member_links.sql','0022_member_link_requests.sql','0025_invitations.sql'])db.exec(readFileSync(`migrations/${f}`,'utf8'));db.exec(`INSERT INTO "user"(id,name,email,createdAt,updatedAt) VALUES('a','Admin','admin@example.test',1,1),('u','Used','used@example.test',1,1); INSERT INTO app_user_roles(user_id,role,granted_by) VALUES('a','admin','bootstrap'); INSERT INTO members(id,member_number,full_name,status,created_by) VALUES('m','1','Member','active','a'),('m2','2','Other','active','a'); INSERT INTO member_invitations(id,token_digest,member_id,email,issued_by,expires_at) VALUES('old',lower(hex(randomblob(32))),'m','old@example.test','a',unixepoch()+3600),('used',lower(hex(randomblob(32))),'m2','used2@example.test','a',unixepoch()+3600); INSERT INTO member_invitation_claims(invitation_id,user_id) VALUES('used','u')`);db.exec(readFileSync('migrations/0062_invitation_review.sql','utf8'));assert.throws(()=>db.exec("INSERT INTO member_invitation_claims(invitation_id,user_id) VALUES('old','u')"),/identity changed|unavailable/i);assert.equal((db.prepare("SELECT count(*) n FROM member_invitation_claims WHERE invitation_id='used'").get() as any).n,1);db.close()})
 test('identity changes permanently invalidate pending links even if reverted',async()=>{const {db,adapter}=fixture();const i=await issueInvitation(adapter,'admin',{memberId:'m1',email:'x@example.test'});db.exec("UPDATE members SET full_name='Changed' WHERE id='m1'; UPDATE members SET full_name='One' WHERE id='m1'");assert.equal((await listInvitations(adapter,'admin')).invitations[0].status,'review required');await assert.rejects(claimInvitation(adapter,{token:i.token,password:'Long-password-2026!'},'127.0.0.1'));db.close()})
 test('reviewed identity and administrator are rechecked at insertion',async()=>{const {db,adapter}=fixture();const original=adapter.prepare.bind(adapter);const race={...adapter,prepare(q:string){const s=original(q);if(!q.startsWith('INSERT INTO member_invitations'))return s;const bind=s.bind.bind(s);s.bind=((...values:unknown[])=>{const b=bind(...values),run=b.run.bind(b);b.run=(async()=>{db.exec("UPDATE members SET member_number='changed' WHERE id='m1'");return run()}) as typeof b.run;return b}) as typeof s.bind;return s}} as D1Database;await assert.rejects(issueInvitation(race,'admin',{memberId:'m1',email:'x@example.test'}),/identity|review/i);assert.equal((db.prepare('SELECT count(*) n FROM member_invitations').get() as any).n,0);db.close()})
+
+test('email is attempted only after authorized issuance and uncertain failure retains the one-use link',async()=>{
+ const {db,adapter}=fixture()
+ let calls=0
+ const deliver=async ({email,token}:{email:string;token:string})=>{calls++;assert.equal(email,'user@example.test');assert.match(token,/^[a-f0-9]{64}$/);throw new Error('provider response with secrets')}
+ await assert.rejects(issueAndDeliverInvitation(adapter,null,{memberId:'m1',expectedMemberName:'One',expectedMemberNumber:'1',email:'USER@example.test'},deliver))
+ assert.equal(calls,0)
+ const result=await issueAndDeliverInvitation(adapter,'admin',{memberId:'m1',expectedMemberName:'One',expectedMemberNumber:'1',email:'USER@example.test'},deliver)
+ assert.equal(calls,1)
+ assert.equal(result.deliveryStatus,'unconfirmed')
+ assert.match(result.token,/^[a-f0-9]{64}$/)
+ assert.equal(JSON.stringify(result).includes('provider response'),false)
+ await claimInvitation(adapter,{token:result.token,password:'Long-password-2026!'},'127.0.0.1')
+ db.close()
+})
+
+test('administrator invitations require authority and assign only the reviewed role atomically',async()=>{
+ const {db,adapter}=fixture();db.exec(readFileSync('migrations/0102_staff_invitations.sql','utf8'))
+ const input={name:'Test Admin',email:'Admin2@Example.test',role:'admin'}
+ await assert.rejects(issueStaffInvitation(adapter,null,input,null))
+ const i=await issueStaffInvitation(adapter,'admin',input,null)
+ assert.equal(i.deliveryStatus,'unavailable')
+ assert.equal(JSON.stringify(db.prepare('SELECT * FROM staff_invitations').get()).includes(i.token),false)
+ await claimInvitation(adapter,{token:i.token,password:'Long-password-2026!'},'127.0.0.1')
+ const u=db.prepare('SELECT id FROM "user" WHERE email=?').get('admin2@example.test') as {id:string}
+ assert.equal((db.prepare('SELECT role FROM app_user_roles WHERE user_id=?').get(u.id) as {role:string}).role,'admin')
+ await assert.rejects(claimInvitation(adapter,{token:i.token,password:'Long-password-2026!'},'127.0.0.2'))
+ db.close()
+})
+
+test('staff invitation cannot collide with member invitations, accept after revoke, or grant unrecognized roles',async()=>{
+ const {db,adapter}=fixture();db.exec(readFileSync('migrations/0102_staff_invitations.sql','utf8'))
+ await assert.rejects(issueStaffInvitation(adapter,'admin',{name:'Name',email:'staff@example.test',role:'superadmin'},null))
+ const i=await issueStaffInvitation(adapter,'admin',{name:'Name',email:'staff@example.test',role:'standard'},null)
+ await assert.rejects(issueInvitation(adapter,'admin',{memberId:'m1',email:'staff@example.test'}))
+ await revokeStaffInvitation(adapter,'admin',{id:i.id})
+ await assert.rejects(claimInvitation(adapter,{token:i.token,password:'Long-password-2026!'},'127.0.0.1'))
+ await issueInvitation(adapter,'admin',{memberId:'m1',email:'staff@example.test'})
+ await assert.rejects(issueStaffInvitation(adapter,'admin',{name:'Name',email:'staff@example.test',role:'admin'},null))
+ db.close()
+})
+
+test('standard workspace invitations do not grant admin and concurrent claims cannot replay',async()=>{
+ const {db,adapter}=fixture();db.exec(readFileSync('migrations/0102_staff_invitations.sql','utf8'))
+ const i=await issueStaffInvitation(adapter,'admin',{name:'Standard',email:'standard@example.test',role:'standard'},null)
+ const results=await Promise.allSettled([claimInvitation(adapter,{token:i.token,password:'Long-password-2026!'},'127.0.0.1'),claimInvitation(adapter,{token:i.token,password:'Long-password-2026!'},'127.0.0.2')])
+ assert.equal(results.filter(r=>r.status==='fulfilled').length,1)
+ const u=db.prepare('SELECT id FROM "user" WHERE email=?').get('standard@example.test') as {id:string}
+ assert.equal(db.prepare('SELECT role FROM app_user_roles WHERE user_id=?').get(u.id),undefined)
+ db.close()
+})
+
+test('failed staff credential creation rolls back claim and role assignment',async()=>{
+ const {db,adapter}=fixture();db.exec(readFileSync('migrations/0102_staff_invitations.sql','utf8'))
+ const i=await issueStaffInvitation(adapter,'admin',{name:'Admin',email:'other-admin@example.test',role:'admin'},null)
+ db.exec('CREATE TRIGGER fail_staff_account BEFORE INSERT ON "account" BEGIN SELECT RAISE(ABORT,\'injected\'); END')
+ await assert.rejects(claimInvitation(adapter,{token:i.token,password:'Long-password-2026!'},'127.0.0.1'))
+ assert.equal((db.prepare('SELECT count(*) n FROM staff_invitation_claims').get() as {n:number}).n,0)
+ assert.equal((db.prepare('SELECT count(*) n FROM "user" WHERE email=?').get('other-admin@example.test') as {n:number}).n,0)
+ db.close()
+})

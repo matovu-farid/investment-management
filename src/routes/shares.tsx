@@ -1,3 +1,6 @@
+import { SpinnerLabel } from '#/components/ui/spinner'
+import { loadRouteInParallel } from '#/lib/parallel-route-loading'
+import { Checkbox } from "#/components/ui/checkbox.tsx"
 import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
@@ -15,9 +18,8 @@ import { Textarea } from '#/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 
 export const Route = createFileRoute('/shares')({
-  beforeLoad: async () => { const session=await getSession(); if (!session) throw redirect({to:'/login'}); return {owner:session.user.id} },
-  loader: async () => { try { return { data: await listSharesFn(), available: true } } catch { return { data: null, available: false } } },
-  pendingComponent: () => <main className="dashboard" role="status">Loading share register…</main>,
+  beforeLoad: async () => { const { auth, data } = await loadRouteInParallel(async () => { const session=await getSession(); if (!session) throw redirect({to:'/login'}); return {owner:session.user.id} }, async () => { try { return { data: await listSharesFn(), available: true } } catch { return { data: null, available: false } } }); return { ...(auth ?? {}), __parallelData: data } },
+  loader: ({ context }) => context.__parallelData,
   component: Shares,
 })
 function Shares() {
@@ -47,14 +49,14 @@ function Shares() {
           <Field><FieldLabel htmlFor="share-date">Event date</FieldLabel><DatePickerInput id="share-date" required value={date} onChange={e=>setDate(e.target.value)}/></Field>
           <Field><FieldLabel htmlFor="share-reference">Reference (optional)</FieldLabel><Input id="share-reference" maxLength={200} value={reference} onChange={e=>setReference(e.target.value)}/></Field>
           <Field><FieldLabel htmlFor="share-notes">Notes (optional)</FieldLabel><Textarea id="share-notes" maxLength={2000} value={notes} onChange={e=>setNotes(e.target.value)}/></Field>
-          <Button disabled={busy || !eventPending.ready || !!eventPending.pending || !!eventPending.storageError}>{busy?'Saving…':'Record event'}</Button>
+          <Button disabled={busy || !eventPending.ready || !!eventPending.pending || !!eventPending.storageError}>{busy ? <SpinnerLabel>Record event</SpinnerLabel> : 'Record event'}</Button>
         </FieldGroup></form>
       </CardContent></Card>
       <PendingRequestNotice title="Joint holding" pending={jointPending.pending} storageError={jointPending.storageError} disabled={busy} onRetry={()=>jointPending.pending&&void sendJoint(jointPending.pending,false)} onDiscard={()=>discardPending(jointPending.discard)}/>
       <Card><CardHeader><CardTitle>Add a joint holding</CardTitle><CardDescription>Select at least two active members and review their identities. Linked members may see joint holding records. This does not assign ownership percentages.</CardDescription></CardHeader><CardContent>
       {jointReview ? <div aria-label="Review joint holding" className="flex flex-col gap-4"><h3>Review before adding</h3><p>Holding: <strong>{jointReview.name}</strong></p><ul>{jointReview.members.map(m=><li key={m.id}>{m.fullName} · {m.memberNumber} · member {m.id}</li>)}</ul><p>Verify each person before adding this joint holding.</p><div className="flex flex-wrap gap-2"><Button type="button" disabled={busy || !jointPending.ready || !!jointPending.pending || !!jointPending.storageError} onClick={()=>void sendJoint(jointReview,true)}>Confirm joint holding</Button><Button type="button" variant="outline" disabled={busy} onClick={()=>setJointReview(null)}>Edit</Button></div></div> : <form onSubmit={joint} className="max-w-xl"><FieldGroup>
         <Field><FieldLabel htmlFor="joint-name">Holding name</FieldLabel><Input id="joint-name" required maxLength={200} value={jointName} onChange={e=>setJointName(e.target.value)}/></Field>
-        <FieldSet><FieldLegend>Active members</FieldLegend>{data.members.filter(m=>m.status==='active').map(m=><label key={m.id} className="flex items-center gap-2"><input type="checkbox" checked={selected.includes(m.id)} onChange={e=>setSelected(e.target.checked?[...selected,m.id]:selected.filter(id=>id!==m.id))}/> {m.fullName} ({m.memberNumber})</label>)}</FieldSet>
+        <FieldSet><FieldLegend>Active members</FieldLegend>{data.members.filter(m=>m.status==='active').map(m=><label key={m.id} className="flex items-center gap-2"><Checkbox checked={selected.includes(m.id)} onCheckedChange={nextChecked=>setSelected((nextChecked===true)?[...selected,m.id]:selected.filter(id=>id!==m.id))}/> {m.fullName} ({m.memberNumber})</label>)}</FieldSet>
         <Button disabled={busy || selected.length < 2 || !jointPending.ready || !!jointPending.pending || !!jointPending.storageError}>Review joint holding</Button>
       </FieldGroup></form>}
       </CardContent></Card>

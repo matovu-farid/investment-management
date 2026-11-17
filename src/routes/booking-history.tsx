@@ -1,3 +1,5 @@
+import { SpinnerLabel } from '#/components/ui/spinner'
+import { loadRouteInParallel } from '#/lib/parallel-route-loading'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -13,9 +15,8 @@ import { NativeSelect } from '#/components/ui/native-select'
 import { Textarea } from '#/components/ui/textarea'
 
 export const Route = createFileRoute('/booking-history')({
-  beforeLoad: async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { userId: session.user.id } },
-  loader: async () => { try { return { data: await listBookingHistoryFn(), available: true } } catch { return { data: null, available: false } } },
-  pendingComponent: () => <main className="dashboard" role="status">Loading booking history…</main>,
+  beforeLoad: async () => { const { auth, data } = await loadRouteInParallel(async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { userId: session.user.id } }, async () => { try { return { data: await listBookingHistoryFn(), available: true } } catch { return { data: null, available: false } } }); return { ...(auth ?? {}), __parallelData: data } },
+  loader: ({ context }) => context.__parallelData,
   component: BookingHistory,
 })
 
@@ -51,7 +52,7 @@ function BookingHistory() {
             <Field><FieldLabel htmlFor="history-event">Event</FieldLabel><NativeSelect id="history-event" value={eventType} onChange={e => setEventType(e.target.value as 'held' | 'resumed')}><option value="held">Held</option><option value="resumed">Resumed</option></NativeSelect></Field>
             <Field><FieldLabel htmlFor="history-date">Event date</FieldLabel><DatePickerInput id="history-date" type="date" required min={booking?.requestedDate} value={eventDate} onChange={e => setEventDate(e.target.value)} /></Field>
             <Field><FieldLabel htmlFor="history-reason">Reason</FieldLabel><Textarea id="history-reason" required maxLength={2000} value={reason} onChange={e => setReason(e.target.value)} /></Field>
-            <Button disabled={busy || !data.bookings.length || !pending.ready || !!pending.pending || !!pending.storageError}>{busy ? 'Saving…' : 'Record event'}</Button>
+            <Button disabled={busy || !data.bookings.length || !pending.ready || !!pending.pending || !!pending.storageError}>{busy ? <SpinnerLabel>Record event</SpinnerLabel> : 'Record event'}</Button>
           </FieldGroup></form>
         </CardContent></Card>
         <Card><CardHeader><CardTitle>Recorded events ({data.events.length})</CardTitle><CardDescription>Recorded hold and resume events; the booking’s stored status is shown in the register.</CardDescription></CardHeader><CardContent className="flex flex-col gap-4">{data.events.length === 0 ? <p>No hold or resume events recorded.</p> : data.events.map(item => <article key={item.id} className="rounded-md border p-4"><h3>{label(item.bookingId)}</h3><p>{item.eventDate} · <Badge variant="secondary">{item.eventType}</Badge></p><p>{item.reason}</p><p>Recorded by {item.createdBy} at {item.createdAt}</p></article>)}</CardContent></Card>

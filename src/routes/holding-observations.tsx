@@ -1,3 +1,4 @@
+import { loadRouteInParallel } from '#/lib/parallel-route-loading'
 import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
@@ -12,8 +13,8 @@ import { PendingRequestNotice, usePendingRequest } from '#/lib/pending-requests/
 import { adminHoldingObservationsFn, recordHoldingObservationFn, voidHoldingObservationFn, publishHoldingObservationFn, withdrawHoldingObservationFn } from '#/server/holding-observations/functions'
 
 export const Route = createFileRoute('/holding-observations')({
-  beforeLoad: async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { user: session.user } },
-  loader: async () => adminHoldingObservationsFn().catch(() => null),
+  beforeLoad: async () => { const { auth, data } = await loadRouteInParallel(async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { user: session.user } }, async () => adminHoldingObservationsFn().catch(() => null)); return { ...(auth ?? {}), __parallelData: data } },
+  loader: ({ context }) => context.__parallelData,
   component: HoldingObservations,
 })
 

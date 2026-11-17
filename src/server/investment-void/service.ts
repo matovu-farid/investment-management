@@ -5,7 +5,7 @@ export async function voidInvestmentSource(db:D1Database,actorId:string|null,inp
  if((v.sourceKind!=='valuation'&&v.sourceKind!=='transaction')||typeof v.sourceId!=='string'||!v.sourceId.trim()||v.sourceId.length>128||typeof v.reason!=='string'||!v.reason.trim()||v.reason.trim().length>450||typeof v.requestKey!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v.requestKey))throw new Error('Invalid request')
  const key=v.requestKey.toLowerCase(),reason=v.reason.trim()
  await db.prepare('INSERT INTO investment_source_voids(id,source_kind,source_id,reason,request_key,created_by) SELECT ?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM investment_source_voids WHERE request_key=?)').bind(crypto.randomUUID(),v.sourceKind,v.sourceId,reason,key,actorId,key).run()
- const saved=await db.prepare('SELECT id,source_kind AS sourceKind,source_id AS sourceId,reason,created_by AS createdBy,created_at AS createdAt FROM investment_source_voids WHERE request_key=?').bind(key).first<{id:string;sourceKind:string;sourceId:string;reason:string;createdBy:string;createdAt:string}>()
+ const saved=await db.prepare("SELECT id,source_kind AS sourceKind,source_id AS sourceId,reason,created_by AS createdBy,created_at AS createdAt FROM investment_source_voids WHERE request_key=? AND EXISTS(SELECT 1 FROM app_user_roles WHERE user_id=? AND role='admin')").bind(key,actorId).first<{id:string;sourceKind:string;sourceId:string;reason:string;createdBy:string;createdAt:string}>()
  if(!saved||saved.sourceKind!==v.sourceKind||saved.sourceId!==v.sourceId||saved.reason!==reason||saved.createdBy!==actorId)throw new Error('Request key already used')
  return saved
 }

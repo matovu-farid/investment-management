@@ -1,3 +1,4 @@
+import { loadRouteInParallel } from '#/lib/parallel-route-loading'
 import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
@@ -13,8 +14,8 @@ import { Field, FieldGroup, FieldLabel } from '#/components/ui/field'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 
 export const Route = createFileRoute('/book-publications')({
-  beforeLoad: async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { userId: session.user.id } },
-  loader: async () => adminBooksFn().catch(() => null),
+  beforeLoad: async () => { const { auth, data } = await loadRouteInParallel(async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { userId: session.user.id } }, async () => adminBooksFn().catch(() => null)); return { ...(auth ?? {}), __parallelData: data } },
+  loader: ({ context }) => context.__parallelData,
   component: BookPublications,
 })
 type Preview = Awaited<ReturnType<typeof previewBooksFn>>

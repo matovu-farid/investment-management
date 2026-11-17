@@ -1,3 +1,5 @@
+import { SpinnerLabel } from '#/components/ui/spinner'
+import { loadRouteInParallel } from '#/lib/parallel-route-loading'
 import { formatJournalDescription } from '#/lib/journal-description'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
@@ -12,8 +14,8 @@ import { NativeSelect, NativeSelectOption } from '#/components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 
 export const Route = createFileRoute('/account-activity')({
-  beforeLoad: async () => { if (!await getSession()) throw redirect({ to: '/login' }) },
-  loader: async () => { try { return { accounts: await accountActivityOptionsFn(), available: true } } catch { return { accounts: [], available: false } } },
+  beforeLoad: async () => { const { auth, data } = await loadRouteInParallel(async () => { if (!await getSession()) throw redirect({ to: '/login' }) }, async () => { try { return { accounts: await accountActivityOptionsFn(), available: true } } catch { return { accounts: [], available: false } } }); return { ...(auth ?? {}), __parallelData: data } },
+  loader: ({ context }) => context.__parallelData,
   component: AccountActivity,
 })
 
@@ -54,7 +56,7 @@ function AccountActivity() {
         <Field><FieldLabel htmlFor="activity-account">Account</FieldLabel><NativeSelect id="activity-account" required value={accountId} disabled={busy} onChange={e => { setAccountId(e.target.value); setResult(null); setError('') }}><NativeSelectOption value="">Select an account</NativeSelectOption>{accounts.map(a => <NativeSelectOption key={a.id} value={a.id}>{a.code} — {a.name} ({a.currency})</NativeSelectOption>)}</NativeSelect></Field>
         <Field><FieldLabel htmlFor="activity-from">From</FieldLabel><DatePickerInput id="activity-from" type="date" required value={startDate} max={endDate || undefined} disabled={busy} onChange={e => { setStartDate(e.target.value); setResult(null); setError('') }} /></Field>
         <Field><FieldLabel htmlFor="activity-to">To</FieldLabel><DatePickerInput id="activity-to" type="date" required value={endDate} min={startDate || undefined} disabled={busy} onChange={e => { setEndDate(e.target.value); setResult(null); setError('') }} /></Field>
-        <Button type="submit" disabled={busy || !accounts.length}>{busy ? 'Loading…' : 'View account activity'}</Button>
+        <Button type="submit" disabled={busy || !accounts.length}>{busy ? <SpinnerLabel>View account activity</SpinnerLabel> : 'View account activity'}</Button>
       </FieldGroup></form></CardContent></Card>
       {error && <Alert variant="destructive" className="mt-6" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}
       {result && <section aria-labelledby="statement-heading">

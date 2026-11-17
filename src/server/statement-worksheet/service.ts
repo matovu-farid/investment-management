@@ -1,3 +1,4 @@
+import { spreadsheetCell as csvCell } from '../../lib/spreadsheet-cell.ts'
 export type Polarity='debit-minus-credit'|'credit-minus-debit'
 type Mapping={accountId:string;lineName:string;polarity:Polarity}
 type Account={id:string;code:string;name:string;currency:string}
@@ -7,7 +8,6 @@ export type WorksheetLine={lineName:string;currency:string;valueMinor:string}
 const isAdmin="EXISTS(SELECT 1 FROM app_user_roles WHERE user_id=? AND role='admin')"
 function validDate(v:unknown):v is string{return typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v+'T00:00:00Z'))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v}
 function record(v:unknown):Record<string,unknown>{if(!v||typeof v!=='object'||Array.isArray(v))throw new Error('Invalid input');return v as Record<string,unknown>}
-function csvCell(v:string,forceText=false){const safe=forceText||/^[\s\u0000-\u001f]*[=+\-@\t\r]/.test(v)?"'"+v:v;return '"'+safe.replace(/"/g,'""')+'"'}
 function csv(result:{mode:string;startDate:string|null;endDate:string;snapshotAt:string;accounts:WorksheetAccount[];lines:WorksheetLine[]}){
  const rows:string[][]=[['Statement working paper'],['Mode',result.mode],['Start date',result.startDate??''],['End date',result.endDate],['Snapshot time UTC',result.snapshotAt],['User-mapped working paper, not an approved financial statement. Posted entries filtered by effective date; the current account register and later backdated postings are included. Amounts are integer minor units.'],['Account ID','Code','Account name','Currency','Debits','Credits','User line','Polarity','Mapped value'],...result.accounts.map(a=>[a.accountId,a.code,a.name,a.currency,a.debits,a.credits,a.lineName??'',a.polarity??'',a.valueMinor??'']),['Line','Currency','Mapped value'],...result.lines.map(l=>[l.lineName,l.currency,l.valueMinor])]
  return '\ufeff'+rows.map((row,i)=>row.map((v,j)=>csvCell(v,(i>=7&&i<7+result.accounts.length&&[0,1,4,5,8].includes(j))||(i>=8+result.accounts.length&&j===2)||([2,3,4].includes(i)&&j===1))).join(',')).join('\r\n')+'\r\n'

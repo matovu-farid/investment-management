@@ -28,7 +28,7 @@ function lineFingerprint(lines: JournalLine[]): string {
 }
 
 /** Internal server-only operation; callers derive actorId from a verified session. */
-export async function postJournal(db: D1Database, actorId: string | null, input: unknown): Promise<PostedEntry> {
+export async function postJournal(db: D1Database, actorId: string | null, input: unknown, beforePosting?: (entryId:string) => D1PreparedStatement[]): Promise<PostedEntry> {
   if (!actorId || (await db.prepare('SELECT role FROM app_user_roles WHERE user_id=?').bind(actorId).first<{role:string}>())?.role !== 'admin') throw new Error('Unauthorized')
   const entry = parse(input)
   const lookup = async (): Promise<PostedEntry | null> => db.prepare(`SELECT id,currency,effective_date AS effectiveDate,description,source_type AS sourceType,source_id AS sourceId,created_by AS createdBy,status,reverses_entry_id AS reversesEntryId FROM journal_entries WHERE source_type=? AND source_id=? AND EXISTS(SELECT 1 FROM app_user_roles WHERE user_id=? AND role='admin')`).bind(entry.sourceType,entry.sourceId,actorId).first<PostedEntry>()
@@ -42,6 +42,7 @@ export async function postJournal(db: D1Database, actorId: string | null, input:
   const id = crypto.randomUUID()
   const statements = [db.prepare('INSERT INTO journal_entries(id,currency,effective_date,description,source_type,source_id,created_by,reverses_entry_id) VALUES (?,?,?,?,?,?,?,?)').bind(id,entry.currency,entry.effectiveDate,entry.description,entry.sourceType,entry.sourceId,actorId,entry.reversesEntryId),
     ...entry.lines.map(l => db.prepare('INSERT INTO journal_lines(id,entry_id,account_id,side,amount_minor) VALUES (?,?,?,?,?)').bind(crypto.randomUUID(),id,l.accountId,l.side,l.amountMinor)),
+    ...(beforePosting?.(id) ?? []),
     db.prepare("UPDATE journal_entries SET status='posted' WHERE id=?").bind(id)]
   try { await db.batch(statements) } catch (error) {
     // A concurrent identical source may have posted while this batch was queued.

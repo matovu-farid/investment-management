@@ -1,6 +1,6 @@
 export type Fact = Record<string, string | number | null>
-export type Report = { start: string; end: string; members: Fact[]; loans: Fact[]; repayments: Fact[]; bookings: Fact[]; bookingSnapshot: Fact[]; bookingSnapshotTotals: Fact[]; bookingStatusEvents: Fact[]; fulfilments: Fact[]; investments: Fact[]; transactions: Fact[]; valuations: Fact[]; shareEvents: Fact[]; shareTrades: Fact[]; cashEntries?: Fact[] }
-export interface ReportRepository { roleFor(userId: string): Promise<string | null>; forPeriod(start: string, end: string): Promise<Report> }
+export type Report = { start: string; end: string; members: Fact[]; loans: Fact[]; repayments: Fact[]; bookings: Fact[]; bookingSnapshot: Fact[]; bookingAgeReview?: Fact[]; bookingAgeSummary?: Fact[]; bookingSnapshotTotals: Fact[]; bookingStatusEvents: Fact[]; fulfilments: Fact[]; investments: Fact[]; transactions: Fact[]; valuations: Fact[]; shareEvents: Fact[]; shareTrades: Fact[]; cashEntries?: Fact[] }
+export interface ReportRepository { roleFor(userId: string): Promise<string | null>; forPeriod(start: string, end: string, actorId: string): Promise<Report> }
 function validDate(value: unknown): value is string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
   const parsed = new Date(`${value}T00:00:00Z`)
@@ -11,5 +11,5 @@ export async function reportForPeriod(repo: ReportRepository, actorId: string | 
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid period')
   const { start, end } = input as Record<string, unknown>
   if (!validDate(start) || !validDate(end) || start > end) throw new Error('Invalid period')
-  return repo.forPeriod(start, end)
+  return repo.forPeriod(start, end, actorId)
 }

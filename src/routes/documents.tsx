@@ -1,4 +1,5 @@
-import { createFileRoute, Link, redirect } from '@tanstack/react-router'
+import { SpinnerLabel, SpinnerStatus } from '#/components/ui/spinner'
+import { createFileRoute, Link, redirect, useBlocker } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { getSession } from '#/lib/auth.functions'
 import { confirmAction } from '#/components/confirmation-host'
@@ -24,6 +25,8 @@ function Documents() {
   const [replacement, setReplacement] = useState<DocumentRow | null>(null), [replacementReason, setReplacementReason] = useState('')
   const [file, setFile] = useState<File | null>(null), [fileKey, setFileKey] = useState(0)
   const [pending, setPending] = useState<Pending | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState('')
+  const dirty = !!file || !!title || !!source || !!documentDate || !!replacement || !!replacementReason
+  useBlocker({disabled:!dirty&&!pending&&!busy,enableBeforeUnload:false,shouldBlockFn:async()=>busy||!await confirmAction(pending ? 'This upload may have been recorded. Leaving clears the pending file from this page; check the register before uploading again. Leave?' : 'Discard the unsaved document details and leave this page?')})
   async function refresh() {
     const result = await fetch('/api/documents', { cache: 'no-store' })
     if (!result.ok) throw new Error('Document register unavailable')
@@ -61,7 +64,7 @@ function Documents() {
   return <div className="app"><header><Link to="/" className="brand"><span className="brand-mark">R</span><span>RNIG <small>INVESTMENT GROUP</small></span></Link><Link to="/" className="quiet">Back to overview</Link></header><main className="dashboard">
     <p className="eyebrow">ADMINISTRATION</p><h1>Supporting documents</h1><p className="lead">Keep source documents such as the investment policy and board materials together.</p>
     <Alert className="mt-6"><AlertDescription>Documents here are available to administrators only. Uploading does not approve the document or publish it to members.</AlertDescription></Alert>
-    {loading ? <p role="status">Loading documents…</p> : !available ? <Alert variant="destructive" className="mt-6"><AlertDescription>The document register is unavailable or your access could not be confirmed.</AlertDescription></Alert> : <>
+    {loading ? <SpinnerStatus label="Fetching documents…" className="mt-6" /> : !available ? <Alert variant="destructive" className="mt-6"><AlertDescription>The document register is unavailable or your access could not be confirmed.</AlertDescription></Alert> : <>
       {error && <Alert variant="destructive" className="mt-6"><AlertDescription>{error}</AlertDescription></Alert>}{message && <Alert role="status" className="mt-6"><AlertDescription>{message}</AlertDescription></Alert>}
       <Card className="mt-6"><CardHeader><CardTitle>{replacement ? 'Record a replacement' : 'Record a document'}</CardTitle><CardDescription>PDF only, up to 5 MB. Add a source and document date when known.</CardDescription></CardHeader><CardContent>
         {pending ? <div className="flex flex-col gap-3"><p>Pending request: {pending.title} · {pending.file.name}{pending.replacesId ? ` · replaces document ${pending.replacesId}` : ''}. The file is kept in this page until the request is confirmed or discarded.</p><div className="flex flex-wrap gap-2"><Button type="button" disabled={busy} onClick={() => void send(pending)}>Retry unchanged</Button><Button type="button" variant="outline" disabled={busy} onClick={() => void discard()}>Discard request</Button></div></div> : <form onSubmit={submit} className="max-w-xl"><FieldGroup>
@@ -71,12 +74,12 @@ function Documents() {
           <Field><FieldLabel htmlFor="document-date">Document date (optional)</FieldLabel><DatePickerInput id="document-date" value={documentDate} onChange={e => setDate(e.target.value)} /></Field>
           {replacement && <Field><FieldLabel htmlFor="replacement-reason">Reason for replacement</FieldLabel><Input id="replacement-reason" required maxLength={500} value={replacementReason} onChange={e => setReplacementReason(e.target.value)} /></Field>}
           <Field><FieldLabel htmlFor="document-file">PDF document</FieldLabel><Input key={fileKey} id="document-file" type="file" accept="application/pdf,.pdf" required onChange={e => setFile(e.target.files?.[0] || null)} /></Field>
-          <Button disabled={busy}>{busy ? 'Uploading…' : 'Record document'}</Button>
+          <Button disabled={busy}>{busy ? <SpinnerLabel>Record document</SpinnerLabel> : 'Record document'}</Button>
         </FieldGroup></form>}
       </CardContent></Card>
       <Card className="mt-6"><CardHeader><CardTitle>Recorded documents ({list?.documents.length ?? 0})</CardTitle><CardDescription>Files are private to administrators. Replacement links record relationships; they do not establish an approved or latest document. Load all pages to review all recorded replacements.</CardDescription></CardHeader><CardContent className="flex flex-col gap-4">
         {!list?.documents.length && !list?.nextCursor ? <p>No documents recorded yet.</p> : list?.documents.map(item => <article id={`document-${item.id}`} key={item.id} className="flex flex-wrap items-start justify-between gap-3 border-b pb-4"><div className="min-w-0 break-words"><h3>{item.title}</h3><p>{item.filename} · {item.size < 1024 ? `${item.size} bytes` : `${(item.size / 1024).toFixed(1)} KB`}</p><p>{item.documentDate || 'Date not recorded'} · {item.source || 'Source not recorded'}</p><p>Recorded {item.uploadedAt} UTC{item.recordedBy ? ` · account ${item.recordedBy}` : ''}</p>{item.replacesId && <p>Replaces document {item.replacesId} · Reason: {item.replacementReason} · <a href={`/api/documents?id=${encodeURIComponent(item.replacesId)}`}>Download previous document</a></p>}{list.documents.filter(row => row.replacesId === item.id).map(row => <p key={row.id}>Recorded replacement: <a href={`#document-${row.id}`}>{row.title}</a></p>)}</div><div className="flex flex-wrap gap-2"><Button variant="outline" asChild><a href={`/api/documents?id=${encodeURIComponent(item.id)}`}>Download PDF</a></Button><Button type="button" variant="outline" disabled={busy || !!pending} onClick={() => { setReplacement(item); setReplacementReason(''); document.getElementById('document-title')?.focus() }}>Record replacement</Button></div></article>)}
-        {list?.nextCursor && <Button variant="outline" disabled={busy} onClick={() => void loadMore()}>{busy ? 'Loading…' : 'Load more documents'}</Button>}
+        {list?.nextCursor && <Button variant="outline" disabled={busy} onClick={() => void loadMore()}>{busy ? <SpinnerLabel>Load more documents</SpinnerLabel> : 'Load more documents'}</Button>}
       </CardContent></Card>
     </>}
   </main></div>

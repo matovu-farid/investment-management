@@ -31,12 +31,13 @@ test('void records reject non-admins and missing sources, retain immutable indiv
 test('service authorizes, retries identically and rejects altered or duplicate requests', async () => {
   const { voidShareEvent } = await import('../../src/server/share-event-void/service.ts')
   const sql=setup()
-  const stmt=(q:string,args:unknown[]=[])=>({bind(...p:unknown[]){return stmt(q,p)},async first(){return sql.prepare(q).get(...args as never[])??null},async run(){return sql.prepare(q).run(...args as never[])}})
+  let revokeAt='';const stmt=(q:string,args:unknown[]=[])=>({bind(...p:unknown[]){return stmt(q,p)},async first(){if(revokeAt&&q.includes(revokeAt)){revokeAt='';sql.exec("DELETE FROM app_user_roles WHERE user_id='admin'")}return sql.prepare(q).get(...args as never[])??null},async run(){return sql.prepare(q).run(...args as never[])}})
   const db={prepare:(q:string)=>stmt(q)} as unknown as D1Database
   const input={eventId:'individual',reason:'duplicate',requestKey:'fa5c5220-5ec2-4f62-97d0-5b72ccff4f5b'}
   await assert.rejects(voidShareEvent(db,'member',input),/unauthorized/i)
   const a=await voidShareEvent(db,'admin',input)
   assert.equal((await voidShareEvent(db,'admin',input)).id,a.id)
+  revokeAt='FROM share_event_voids WHERE request_key=?';await assert.rejects(voidShareEvent(db,'admin',input));sql.exec("INSERT INTO app_user_roles(user_id,role,granted_by) VALUES('admin','admin','bootstrap')")
   await assert.rejects(voidShareEvent(db,'admin',{...input,reason:'changed'}),/already used/i)
   await assert.rejects(voidShareEvent(db,'admin',{...input,requestKey:'7a5c5220-5ec2-4f62-97d0-5b72ccff4f5b'}),/unique/i)
 })

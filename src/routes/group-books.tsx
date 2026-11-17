@@ -1,3 +1,4 @@
+import { loadRouteInParallel } from '#/lib/parallel-route-loading'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { getSession } from '#/lib/auth.functions'
 import { memberBooksFn } from '#/server/book-publications/functions'
@@ -7,8 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 
 export const Route = createFileRoute('/group-books')({
-  beforeLoad: async () => { if (!await getSession()) throw redirect({ to: '/login' }) },
-  loader: async () => memberBooksFn().catch(() => null),
+  beforeLoad: async () => { const { auth, data } = await loadRouteInParallel(async () => { if (!await getSession()) throw redirect({ to: '/login' }) }, async () => memberBooksFn().catch(() => null)); return { ...(auth ?? {}), __parallelData: data } },
+  loader: ({ context }) => context.__parallelData,
   component: GroupBooks,
 })
 const number = (value: string) => BigInt(value).toLocaleString('en-US')

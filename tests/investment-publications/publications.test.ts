@@ -7,11 +7,12 @@ function fixture(){
  const db=new DatabaseSync(':memory:');db.exec('PRAGMA foreign_keys=ON; CREATE TABLE investment_source_voids(source_kind TEXT,source_id TEXT,reason TEXT,created_at TEXT)')
  for(const f of ['0001_auth.sql','0002_domain.sql','0003_roles.sql','0011_member_links.sql','0027_investment_publications.sql'])db.exec(readFileSync(`migrations/${f}`,'utf8'))
  db.exec(`INSERT INTO "user"(id,name,email,createdAt,updatedAt) VALUES('a','Admin','a@example.test',1,1),('m','Member','m@example.test',1,1),('x','Other','x@example.test',1,1); INSERT INTO app_user_roles(user_id,role,granted_by) VALUES('a','admin','boot'); INSERT INTO members(id,member_number,full_name,created_by) VALUES('m1','1','Member','a'); INSERT INTO member_user_links(id,user_id,member_id,linked_by) VALUES('l','m','m1','a'); INSERT INTO investments(id,name,asset_class,currency,notes,created_by) VALUES('i','Bond','Bonds','UGX','PRIVATE investment','a'); INSERT INTO investment_valuations(id,investment_id,valuation_date,amount_minor,currency,basis,source,notes,created_by) VALUES('v','i','2026-01-01',123456,'UGX','Market','Quote','PRIVATE valuation','a'),('future','i',date('now','+3 hours','+1 day'),100,'UGX','Estimate','Source',NULL,'a');`)
- type S={q:string;args:unknown[];bind:(...a:unknown[])=>S;first:()=>Promise<unknown>;all:()=>Promise<{results:unknown[]}>;run:()=>Promise<{meta:{changes:number}}>}; const adapter={prepare(q:string):S{return{q,args:[],bind(...a){this.args=a;return this},async first(){return db.prepare(this.q).get(...this.args as never[])??null},async all(){return{results:db.prepare(this.q).all(...this.args as never[])}},async run(){return{meta:{changes:Number(db.prepare(this.q).run(...this.args as never[]).changes)}}}}}} as unknown as D1Database
+ type S={q:string;args:unknown[];bind:(...a:unknown[])=>S;first:()=>Promise<unknown>;all:()=>Promise<{results:unknown[]}>;run:()=>Promise<{meta:{changes:number}}>}; const adapter={prepare(q:string):S{return{q,args:[],bind(...a){this.args=a;return this},async first(){return db.prepare(this.q).get(...this.args as never[])??null},async all(){return{results:db.prepare(this.q).all(...this.args as never[])}},async run(){return{meta:{changes:Number(db.prepare(this.q).run(...this.args as never[]).changes)}}}}},async batch(statements:S[]){return Promise.all(statements.map(s=>s.all()))}} as unknown as D1Database
  return {db,adapter}
 }
 const preview={investmentId:'i',name:'Bond',assetClass:'Bonds',currency:'UGX',valuationDate:'2026-01-01',amountMinor:'123456',basis:'Market',source:'Quote'}
 const p={valuationId:'v',requestKey:'11111111-1111-4111-8111-111111111111',preview},w={requestKey:'22222222-2222-4222-8222-222222222222'}
+test('admin publication list rejects revocation at the read boundary even when empty',async()=>{for(const empty of [false,true]){const {db,adapter}=fixture();if(empty)db.exec('DELETE FROM investment_valuations; DELETE FROM investments');let revoked=false;const revoke=()=>{if(!revoked){db.exec("DELETE FROM app_user_roles WHERE user_id='a'");revoked=true}};const raced={prepare(q:string){const statement=adapter.prepare(q);if(q.includes('FROM investment_valuations v JOIN investments i')){const all=statement.all.bind(statement);statement.all=async()=>{revoke();return all()}}return statement},async batch(items:D1PreparedStatement[]){revoke();return adapter.batch(items)}} as D1Database;await assert.rejects(listAdminPublications(raced,'a'),/unauthorized/i);db.close()}})
 test('void valuation cannot be selected or published',async()=>{const {db,adapter}=fixture();db.exec("INSERT INTO investment_source_voids VALUES('valuation','v','bad amount','2026-11-05')");assert.equal((await listAdminPublications(adapter,'a')).options.some(x=>x.valuationId==='v'),false);await assert.rejects(publishInvestment(adapter,'a',p));})
 test('publication requires the exact preview and cannot disclose a changed observation',async()=>{
  const {db,adapter}=fixture();const request={...p,preview}
@@ -37,4 +38,16 @@ test('keys cannot be reused for different observations and database enforces sna
  assert.throws(()=>db.prepare("UPDATE investment_publications SET amount_minor=2 WHERE id=?").run(first.id),/administrator/i)
  assert.throws(()=>db.exec("INSERT INTO investment_publications(id,valuation_id,investment_id,name,asset_class,currency,valuation_date,amount_minor,basis,published_by,publish_key) VALUES('bad','v2','i','Bond','Bonds','UGX','2026-02-01',500,'Other','m','badkey')"),/unauthorized/i)
  db.exec("UPDATE member_user_links SET revoked_at=CURRENT_TIMESTAMP,revoked_by='a' WHERE id='l'");await assert.rejects(listMemberPublications(adapter,'m'),/unauthorized/i);db.close()
+})
+
+test('revoked administrators cannot resolve publication or withdrawal retry records',async()=>{
+ for(const mode of ['publish','withdraw'] as const){
+  const {db,adapter}=fixture();const saved=await publishInvestment(adapter,'a',p)
+  if(mode==='withdraw')await withdrawInvestment(adapter,'a',{publicationId:saved.id,...w})
+  let observed:unknown='not read',revoked=false
+  const raced={prepare(q:string){const statement=adapter.prepare(q);if(q.includes('FROM investment_publications WHERE')&&(mode==='publish'?q.includes('publish_key=?'):q.includes('WHERE id=?'))){const first=statement.first.bind(statement);statement.first=async()=>{if(!revoked){db.exec("DELETE FROM app_user_roles WHERE user_id='a'");revoked=true}observed=await first();return observed}}return statement}} as unknown as D1Database
+  if(mode==='publish')await assert.rejects(publishInvestment(raced,'a',p))
+  else await assert.rejects(withdrawInvestment(raced,'a',{publicationId:saved.id,...w}))
+  assert.equal(observed,null);db.close()
+ }
 })

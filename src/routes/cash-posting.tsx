@@ -1,3 +1,4 @@
+import { loadRouteInParallel } from '#/lib/parallel-route-loading'
 import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
@@ -14,9 +15,8 @@ import { PendingRequestNotice, usePendingRequest } from '#/lib/pending-requests/
 import { listCashPostingFn, postCashEntryFn, reverseCashEntryFn, postCashCorrectionFn, reverseCashCorrectionFn } from '#/server/cash-posting/functions'
 
 export const Route = createFileRoute('/cash-posting')({
-  beforeLoad: async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { userId: session.user.id } },
-  loader: async () => { try { return await listCashPostingFn() } catch { return null } },
-  pendingComponent: () => <main className="dashboard" role="status">Loading cash postings…</main>,
+  beforeLoad: async () => { const { auth, data } = await loadRouteInParallel(async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { userId: session.user.id } }, async () => { try { return await listCashPostingFn() } catch { return null } }); return { ...(auth ?? {}), __parallelData: data } },
+  loader: ({ context }) => context.__parallelData,
   component: CashPosting,
 })
 

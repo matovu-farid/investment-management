@@ -22,6 +22,31 @@ test('cash activity in a reviewed board packet stays frozen after a void and lat
  sql.close()
 })
 const key='fa5c5220-5ec2-4f62-97d0-5b72ccff4f5b'
+test('completed server risk capture is copied into the reviewed board packet',async()=>{
+ const {sql,db}=setup(),s=await import('../../src/server/board-packets/service.ts'),risk=await import('../../src/server/board-packets/risk-capture.ts')
+ const capture=await risk.startBoardRiskCapture(db,'a',{currency:'UGX',asOfDate:'2020-12-31'})
+ assert.equal(capture.profile.nextOffset,null)
+ await assert.rejects(s.previewBoardPacket(db,'b',{start:'2020-01-01',end:'2020-12-31',riskCaptureId:capture.id}))
+ await assert.rejects(s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-30',riskCaptureId:capture.id}),/date/i)
+ const p=await s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31',riskCaptureId:capture.id})
+ assert.equal(p.creditRisk?.currency,'UGX');assert.ok(!p.omissions.some(x=>x.includes('credit-risk profile')))
+ await s.saveBoardPacket(db,'a',{previewId:p.previewId,requestKey:key});sql.prepare('DELETE FROM board_risk_captures WHERE id=?').run(capture.id)
+ const frozen=(await s.listBoardPackets(db,'a'))[0].packet;assert.equal(frozen.creditRisk?.currency,'UGX')
+ const {boardPacketCsv}=await import('../../src/lib/board-packet-export.ts');assert.match(boardPacketCsv(frozen),/Credit-book risk profile/i)
+ sql.close()
+})
+test('multi-page risk capture freezes coverage and unavailable loans in a packet',async()=>{
+ const {sql,db}=setup(),s=await import('../../src/server/board-packets/service.ts'),risk=await import('../../src/server/board-packets/risk-capture.ts')
+ for(let i=0;i<6;i++)sql.prepare("INSERT INTO loans(id,member_id,principal_minor,currency,disbursement_date,terms,created_by) VALUES(?,'m',100,'UGX','2020-01-01','terms','a')").run(`loan-${i}`)
+ const first=await risk.startBoardRiskCapture(db,'a',{currency:'UGX',asOfDate:'2020-12-31'})
+ await assert.rejects(s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31',riskCaptureId:first.id}),/incomplete/i)
+ const completed=await risk.advanceBoardRiskCapture(db,'a',{id:first.id,expectedOffset:5});assert.equal(completed.profile.unavailableLoanIds.length,6)
+ const p=await s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31',riskCaptureId:first.id,includeCalculatedLending:true});assert.equal(p.creditRisk?.totalEligible,6);assert.equal(p.creditRisk?.unavailableLoanIds.length,6)
+ await s.saveBoardPacket(db,'a',{previewId:p.previewId,requestKey:key});const saved=(await s.listBoardPackets(db,'a'))[0].packet
+ const {boardPacketCsv}=await import('../../src/lib/board-packet-export.ts');const csv=boardPacketCsv(saved);assert.match(csv,/Balance unavailable/);assert.match(csv,/loan-5/)
+ const {boardPacketSummary}=await import('../../src/lib/board-packet-summary.ts');assert.doesNotMatch(JSON.stringify(boardPacketSummary(saved)),/loan-5|creditRisk/)
+ sql.close()
+})
 test('unlinked member balance observations are frozen in board-pack lending data and CSV',async()=>{
  const {sql,db}=setup()
  sql.exec(`INSERT INTO loans(id,member_id,principal_minor,currency,disbursement_date,terms,created_by) VALUES('loan','m',1000,'UGX','2020-01-01','terms','a');
@@ -37,8 +62,19 @@ test('unlinked member balance observations are frozen in board-pack lending data
  assert.doesNotMatch(saved.lending.data.csv,/later correction/)
  sql.close()
 })
-test('frozen reviewed packet is admin-only, retryable and preserves components',async()=>{const {sql,db}=setup();const s=await import('../../src/server/board-packets/service.ts');await assert.rejects(s.previewBoardPacket(db,'u',{start:'2020-01-01',end:'2020-12-31'}));const p=await s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31'});assert.equal(p.activity.data.members.length,1);assert.equal(p.omissions.length,4);const out=await s.saveBoardPacket(db,'a',{previewId:p.previewId,requestKey:key});assert.deepEqual(await s.saveBoardPacket(db,'a',{previewId:p.previewId,requestKey:key}),out);sql.exec("UPDATE members SET full_name='Later' WHERE id='m'");const rows=await s.listBoardPackets(db,'a');assert.equal(rows[0].packet.activity.data.members[0].name,'Member');await assert.rejects(s.listBoardPackets(db,'u'));sql.close()})
+test('frozen reviewed packet is admin-only, retryable and preserves components',async()=>{const {sql,db}=setup();const s=await import('../../src/server/board-packets/service.ts');await assert.rejects(s.previewBoardPacket(db,'u',{start:'2020-01-01',end:'2020-12-31'}));const p=await s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31'});assert.equal(p.activity.data.members.length,1);assert.equal(p.omissions.length,6);assert.ok(p.omissions.some(x=>x.includes('credit-risk profile')));const out=await s.saveBoardPacket(db,'a',{previewId:p.previewId,requestKey:key});assert.deepEqual(await s.saveBoardPacket(db,'a',{previewId:p.previewId,requestKey:key}),out);sql.exec("UPDATE members SET full_name='Later' WHERE id='m'");const rows=await s.listBoardPackets(db,'a');assert.equal(rows[0].packet.activity.data.members[0].name,'Member');assert.ok(rows[0].packet.omissions.some(x=>x.includes('credit-risk profile')));await assert.rejects(s.listBoardPackets(db,'u'));sql.close()})
 test('changes after preview do not alter the reviewed frozen packet',async()=>{const {sql,db}=setup();const s=await import('../../src/server/board-packets/service.ts');const p=await s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31'});sql.exec("UPDATE members SET full_name='Changed' WHERE id='m'");await s.saveBoardPacket(db,'a',{previewId:p.previewId,requestKey:key});assert.equal((await s.listBoardPackets(db,'a'))[0].packet.activity.data.members[0].name,'Member');sql.close()})
+test('corrected policy affects new allocation reviews while saved board drafts retain the reviewed range',async()=>{
+ const {sql,db}=setup();sql.exec(`INSERT INTO investments(id,name,asset_class,currency,created_by) VALUES('i','Bond','Bonds','UGX','a');INSERT INTO investment_valuations(id,investment_id,valuation_date,amount_minor,currency,basis,created_by) VALUES('v','i','2020-06-01',100,'UGX','cost','a');INSERT INTO policy_targets(id,asset_class,min_basis_points,max_basis_points,effective_date,source,created_by) VALUES('p','Bonds',1000,2500,'2020-01-01','Original','a')`)
+ const packets=await import('../../src/server/board-packets/service.ts'),{correctPolicyTarget}=await import('../../src/server/policy/corrections.ts')
+ const selection={currency:'UGX',asOf:'2020-12-31',selected:{i:'v'},mappings:{Bonds:'p'}}
+ const preview=await packets.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31',allocation:selection});assert.equal(preview.allocation?.data.policyGroups[0].policy.maxBasisPoints,2500)
+ await correctPolicyTarget(db,'a',{policyId:'p',expectedCorrectionId:null,expectedMinBasisPoints:1000,expectedMaxBasisPoints:2500,expectedTargetBasisPoints:null,expectedSource:'Original',expectedNotes:null,minBasisPoints:0,maxBasisPoints:10000,targetBasisPoints:null,source:'Corrected',notes:null,reason:'Test correction',requestKey:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'})
+ await packets.saveBoardPacket(db,'a',{previewId:preview.previewId,requestKey:key});const saved=(await packets.listBoardPackets(db,'a'))[0].packet
+ assert.equal(saved.allocation?.data.policyGroups[0].policy.maxBasisPoints,2500)
+ const updated=await packets.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31',allocation:selection});assert.equal(updated.allocation?.data.policyGroups[0].policy.maxBasisPoints,10000)
+ sql.close()
+})
 test('unsaved previews expire and are cleaned up, saved packets remain immutable',async()=>{const {sql,db}=setup();const s=await import('../../src/server/board-packets/service.ts');const p=await s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31'});await s.saveBoardPacket(db,'a',{previewId:p.previewId,requestKey:key});sql.exec(`INSERT INTO board_packet_previews(id,created_by,packet,created_at) SELECT 'expired','a',packet,'2000-01-01 00:00:00' FROM board_packet_previews WHERE id='${p.previewId}'`);await assert.rejects(s.saveBoardPacket(db,'a',{previewId:'expired',requestKey:'ea5c5220-5ec2-4f62-97d0-5b72ccff4f5b'}));await s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31'});assert.equal(sql.prepare("SELECT count(*) AS n FROM board_packet_previews WHERE id='expired'").get()!.n,0);assert.throws(()=>sql.exec(`DELETE FROM board_packet_previews WHERE id='${p.previewId}'`));assert.equal((await s.listBoardPackets(db,'a')).length,1);sql.close()})
 test('preview is owner-bound and a request key cannot be repurposed',async()=>{const {sql,db}=setup();sql.exec(`INSERT INTO app_user_roles(user_id,role,granted_by) VALUES('u','admin','a')`);const s=await import('../../src/server/board-packets/service.ts');const p=await s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31'});await assert.rejects(s.saveBoardPacket(db,'u',{previewId:p.previewId,requestKey:key}));const q=await s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31'});await s.saveBoardPacket(db,'a',{previewId:p.previewId,requestKey:key});await assert.rejects(s.saveBoardPacket(db,'a',{previewId:q.previewId,requestKey:key}));assert.equal((await s.listBoardPackets(db,'a')).length,1);sql.close()})
 test('explicit allocation and budget choices are captured and frozen',async()=>{
@@ -50,10 +86,44 @@ test('explicit allocation and budget choices are captured and frozen',async()=>{
  INSERT INTO budget_lines(id,category,period_start,period_end,currency,amount_minor,source,created_by,request_key) VALUES('b','Income','2020-01-01','2020-12-31','UGX',200,'budget','a','bkey');`)
  const s=await import('../../src/server/board-packets/service.ts')
  const p=await s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31',allocation:{currency:'UGX',asOf:'2020-12-31',selected:{i:'v'},mappings:{Bonds:'p'}},budgets:[{budgetId:'b',transactionIds:['t']}]})
- assert.equal(p.allocation?.data.total,'9007199254740991');assert.equal(p.budgets?.data[0].difference,'-100');assert.deepEqual(p.budgets?.selection,[{budgetId:'b',transactionIds:['t']}]);assert.equal(p.omissions.length,2)
+ assert.equal(p.allocation?.data.total,'9007199254740991');assert.equal(p.budgets?.data[0].difference,'-100');assert.deepEqual(p.budgets?.selection,[{budgetId:'b',transactionIds:['t']}]);assert.equal(p.omissions.length,4)
  await s.saveBoardPacket(db,'a',{previewId:p.previewId,requestKey:key});sql.exec("INSERT INTO investment_source_voids(id,source_kind,source_id,reason,request_key,created_by) VALUES('x','valuation','v','error','xkey','a')")
  assert.equal((await s.listBoardPackets(db,'a'))[0].packet.allocation?.data.total,'9007199254740991')
  await assert.rejects(s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31',allocation:{currency:'UGX',asOf:'2020-12-31',selected:{i:'v'},mappings:{}}}))
+ sql.close()
+})
+test('board packet preserves combined policy groups after its underlying valuation changes',async()=>{
+ const {sql,db}=setup()
+ sql.exec(`INSERT INTO investments(id,name,asset_class,currency,created_by) VALUES('i1','Fund','Money market','UGX','a'),('i2','Deposit','Fixed deposit','UGX','a');
+ INSERT INTO investment_valuations(id,investment_id,valuation_date,amount_minor,currency,basis,created_by) VALUES('v1','i1','2020-06-01',40,'UGX','cost','a'),('v2','i2','2020-06-01',60,'UGX','cost','a');
+ INSERT INTO policy_targets(id,asset_class,min_basis_points,max_basis_points,effective_date,created_by) VALUES('p','Short-term',9000,10000,'2020-01-01','a');`)
+ const s=await import('../../src/server/board-packets/service.ts')
+ const p=await s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31',allocation:{currency:'UGX',asOf:'2020-12-31',selected:{i1:'v1',i2:'v2'},mappings:{'Money market':'p','Fixed deposit':'p'}}})
+ assert.equal(p.allocation?.data.policyGroups[0].amountMinor,'100')
+ assert.equal(p.allocation?.data.policyGroups[0].comparison,'within')
+ await s.saveBoardPacket(db,'a',{previewId:p.previewId,requestKey:key})
+ sql.exec("INSERT INTO investment_source_voids(id,source_kind,source_id,reason,request_key,created_by) VALUES('x','valuation','v1','error','xkey','a')")
+ const group=(await s.listBoardPackets(db,'a'))[0].packet.allocation?.data.policyGroups[0]
+ assert.equal(group?.amountMinor,'100');assert.equal(group?.comparison,'within');assert.deepEqual(new Set(group?.assetClasses),new Set(['Money market','Fixed deposit']))
+ sql.close()
+})
+test('board packet captures explicit zero policy comparisons and rejects duplicates',async()=>{
+ const {sql,db}=setup()
+ sql.exec(`INSERT INTO investments(id,name,asset_class,currency,created_by) VALUES('i','Bond','Bonds','UGX','a');
+ INSERT INTO investment_valuations(id,investment_id,valuation_date,amount_minor,currency,basis,created_by) VALUES('v','i','2020-06-01',100,'UGX','cost','a');
+ INSERT INTO policy_targets(id,asset_class,min_basis_points,max_basis_points,effective_date,created_by) VALUES('p','Equities',2500,4500,'2020-01-01','a');`)
+ const s=await import('../../src/server/board-packets/service.ts')
+ const base={currency:'UGX',asOf:'2020-12-31',selected:{i:'v'},mappings:{},zeroPolicyIds:['p']}
+ const p=await s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31',allocation:base})
+ assert.equal(p.allocation?.data.policyGroups[0].comparison,'below');assert.equal(p.allocation?.data.policyGroups[0].explicitZero,true)
+ await s.saveBoardPacket(db,'a',{previewId:p.previewId,requestKey:key})
+ const frozen=(await s.listBoardPackets(db,'a'))[0].packet.allocation!
+ assert.deepEqual(frozen.selection.zeroPolicyIds,['p']);assert.equal(frozen.data.policyGroups[0].amountMinor,'0')
+ const {boardPacketCsv}=await import('../../src/lib/board-packet-export.ts');const csv=boardPacketCsv((await s.listBoardPackets(db,'a'))[0].packet)
+ assert.match(csv,/credit-risk profile is not included/)
+ assert.match(csv,/No selected classes \(explicit zero\)/);assert.match(csv,/does not establish that the full portfolio has no holdings/)
+ await assert.rejects(s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31',allocation:{...base,zeroPolicyIds:['p','p']}}),/duplicate/i)
+ await assert.rejects(s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31',allocation:{...base,mappings:{Bonds:'p'}}}),/mapped/i)
  sql.close()
 })
 test('options and selected comparisons require admin and reject invalid selections',async()=>{
@@ -71,7 +141,7 @@ test('empty transaction choice is explicit and later voided transactions cannot 
  const s=await import('../../src/server/board-packets/service.ts')
  const options=await s.boardPacketOptions(db,'a');assert.equal(options.budgets.transactions[0].id,'t')
  const p=await s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31',budgets:[{budgetId:'b',transactionIds:[]}]})
- assert.equal(p.budgets?.data[0].selectedTotal,'0');assert.equal(p.omissions.length,3)
+ assert.equal(p.budgets?.data[0].selectedTotal,'0');assert.equal(p.omissions.length,5)
  sql.exec("INSERT INTO investment_source_voids(id,source_kind,source_id,reason,request_key,created_by) VALUES('x','transaction','t','error','xkey','a')")
  await assert.rejects(s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31',budgets:[{budgetId:'b',transactionIds:['t']}]}))
  sql.close()
@@ -179,5 +249,37 @@ test('budget comparison captures an explicit cash basis and preserves its frozen
  assert.equal(frozen.data[0].comparisonBasis,'cash_payments');assert.equal(frozen.data[0].difference,'100')
  await assert.rejects(s.previewBoardPacket(db,'a',{...input,budgets:[{budgetId:'b',transactionIds:[],comparisonBasis:'cash_receipts'}]}))
  await assert.rejects(s.previewBoardPacket(db,'a',{...input,budgets:[{...selection,comparisonBasis:'unknown'}]}))
+ sql.close()
+})
+
+
+test('optional calculated totals are frozen when a later loan is entered',async()=>{const {sql,db}=setup(),s=await import('../../src/server/board-packets/service.ts');const p=await s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31',includeCalculatedLending:true});assert.equal(p.calculatedLending?.data.eligible,0);assert.ok(!p.omissions.some(x=>x.includes('calculated lending totals')));sql.exec("INSERT INTO loans(id,member_id,principal_minor,currency,disbursement_date,terms,created_by) VALUES('late','m',1000,'UGX','2020-01-01','terms','a')");await s.saveBoardPacket(db,'a',{previewId:p.previewId,requestKey:key});const frozen=(await s.listBoardPackets(db,'a'))[0].packet.calculatedLending;assert.equal(frozen?.data.eligible,0);const next=await s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31',includeCalculatedLending:true});assert.equal(next.calculatedLending?.data.eligible,1);assert.equal(next.calculatedLending?.data.omitted.unconfigured,1);await assert.rejects(s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31',includeCalculatedLending:'yes'}));sql.close()})
+
+test('combined portfolio selection is captured in a frozen board packet',async()=>{
+ const {sql,db}=setup()
+ sql.exec("INSERT INTO investments(id,name,asset_class,currency,created_by) VALUES('i','Bond','Bonds','UGX','a'); INSERT INTO investment_valuations(id,investment_id,valuation_date,amount_minor,currency,basis,created_by) VALUES('v','i','2020-06-01',100,'UGX','cost','a')")
+ const s=await import('../../src/server/board-packets/service.ts')
+ const choice={currency:'UGX',asOf:'2026-08-31',selected:{i:'v'},mappings:{},zeroPolicyIds:[],cashAccountIds:[],includeLending:false,overlapReviewed:true,liquidityReview:{investmentIds:['i'],cashAccountIds:[]},turboReview:{investmentIds:['i'],memoReferences:{i:'Memo reference 1'}},equityReview:{classifications:[{investmentId:'i',company:'Company A',sector:'Banking'}]}}
+ const p=await s.previewBoardPacket(db,'a',{start:'2026-05-01',end:'2026-08-31',combinedAllocation:choice})
+ assert.equal(p.combinedAllocation?.data.allocation.total,'100');assert.equal(p.combinedAllocation?.data.liquidity?.amountMinor,'100');assert.equal(p.combinedAllocation?.data.liquidity?.comparison,'within');assert.equal(p.combinedAllocation?.data.turboReview?.deals[0]?.comparison,'above')
+ await s.saveBoardPacket(db,'a',{previewId:p.previewId,requestKey:key})
+ sql.exec("INSERT INTO investment_source_voids(id,source_kind,source_id,reason,request_key,created_by) VALUES('void','valuation','v','correction','void-key','a')")
+ const saved=(await s.listBoardPackets(db,'a'))[0].packet
+ assert.equal(saved.combinedAllocation?.data.allocation.total,'100');assert.deepEqual(saved.combinedAllocation?.data.liquidity?.investmentIds,['i']);assert.equal(saved.combinedAllocation?.data.turboReview?.deals[0]?.name,'Bond');assert.equal(saved.combinedAllocation?.data.turboReview?.deals[0]?.memoReference,'Memo reference 1');assert.equal(saved.combinedAllocation?.data.equityReview?.companies[0]?.name,'Company A')
+ const {boardPacketCsv}=await import('../../src/lib/board-packet-export.ts')
+ assert.match(boardPacketCsv(saved),/Combined source evidence/);assert.match(boardPacketCsv(saved),/Selected-source liquidity review/);assert.match(boardPacketCsv(saved),/HIGH RISK/);assert.match(boardPacketCsv(saved),/Memo reference 1/);assert.match(boardPacketCsv(saved),/Banking/)
+ await assert.rejects(s.previewBoardPacket(db,'a',{start:'2026-05-01',end:'2026-08-31',combinedAllocation:{...choice,overlapReviewed:false}}),/overlap/i)
+ sql.close()
+})
+
+test('a revoked administrator cannot resolve a saved draft retry',async()=>{
+ const {sql,db}=setup()
+ const s=await import('../../src/server/board-packets/service.ts')
+ const preview=await s.previewBoardPacket(db,'a',{start:'2020-01-01',end:'2020-12-31'})
+ await s.saveBoardPacket(db,'a',{previewId:preview.previewId,requestKey:key})
+ let read:unknown='not observed'
+ const racing={...db,prepare(query:string){const original=db.prepare(query);if(!query.startsWith('SELECT id,preview_id AS previewId,created_by AS createdBy FROM board_packets WHERE request_key='))return original;return {bind(...args:unknown[]){const bound=original.bind(...args);return {...bound,async first(){sql.exec("DELETE FROM app_user_roles WHERE user_id='a'");read=await bound.first();return read}}}}}} as unknown as D1Database
+ await assert.rejects(s.saveBoardPacket(racing,'a',{previewId:preview.previewId,requestKey:key}))
+ assert.equal(read,null)
  sql.close()
 })

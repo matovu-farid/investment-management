@@ -3,6 +3,8 @@ import {readFileSync} from 'node:fs'
 import {DatabaseSync} from 'node:sqlite'
 import {test} from 'node:test'
 import {listCashPosting,postCashEntry,reverseCashEntry,postCashCorrection,reverseCashCorrection} from '../../src/server/cash-posting/service.ts'
+import {statementWorksheet} from '../../src/server/statement-worksheet/service.ts'
+import {trialBalance} from '../../src/server/trial-balance/service.ts'
 function fixture(){
  const db=new DatabaseSync(':memory:');db.exec('PRAGMA foreign_keys=ON')
  for(const f of ['0001_auth.sql','0001_ledger.sql','0003_roles.sql','0012_reversal_chronology.sql','0071_cash_register.sql','0074_cash_posting.sql','0075_cash_corrections.sql'])db.exec(readFileSync(`migrations/${f}`,'utf8'))
@@ -13,6 +15,22 @@ function fixture(){
 }
 const input={entryId:'e',cashAccountId:'cash',counterpartAccountId:'other',expectedDate:'2026-02-01',expectedDirection:'payment',expectedAmountMinor:'1000',expectedCurrency:'UGX'}
 const voidSql="INSERT INTO cash_entry_voids(id,entry_id,reason,request_key,created_by) VALUES('v','e','Incorrect','voidkey','u')"
+test('cash correction flows into dated trial balances and statement working papers',async()=>{
+ const {db,adapter}=fixture()
+ await postCashEntry(adapter,'u',input)
+ const reversal=await reverseCashEntry(adapter,'u',{entryId:'e',effectiveDate:'2026-03-01',reason:'Wrong expense account'})
+ const correction=await postCashCorrection(adapter,'u',{...input,predecessorReversalId:reversal.id,requestKey:'b1111111-1111-4111-8111-111111111111',date:'2026-03-02',counterpartAccountId:'alt'})
+ await reverseCashCorrection(adapter,'u',{journalId:correction.journalId,date:'2026-03-03',reason:'Corrected twice'})
+ const mappings=[{accountId:'other',lineName:'Original expense',polarity:'debit-minus-credit'},{accountId:'alt',lineName:'Corrected expense',polarity:'debit-minus-credit'}]
+ const position=async(endDate:string)=>statementWorksheet(adapter,'u',{mode:'position',startDate:null,endDate,mappings})
+ const before=await position('2026-02-28');assert.deepEqual(before.lines.map(x=>[x.lineName,x.valueMinor]),[['Original expense','1000'],['Corrected expense','0']])
+ const reversed=await position('2026-03-01');assert.deepEqual(reversed.lines.map(x=>[x.lineName,x.valueMinor]),[['Original expense','0'],['Corrected expense','0']])
+ const corrected=await position('2026-03-02');assert.deepEqual(corrected.lines.map(x=>[x.lineName,x.valueMinor]),[['Original expense','0'],['Corrected expense','1000']])
+ const final=await position('2026-03-03');assert.deepEqual(final.lines.map(x=>[x.lineName,x.valueMinor]),[['Original expense','0'],['Corrected expense','0']])
+ const march=await statementWorksheet(adapter,'u',{mode:'activity',startDate:'2026-03-01',endDate:'2026-03-02',mappings});assert.deepEqual(march.lines.map(x=>[x.lineName,x.valueMinor]),[['Original expense','-1000'],['Corrected expense','1000']])
+ const trial=await trialBalance(adapter,'u','2026-03-02');assert.equal(trial.accounts.find(a=>a.accountId==='cash')?.netCredit,'1000');assert.equal(trial.accounts.find(a=>a.accountId==='alt')?.netDebit,'1000');assert.equal(trial.totals.find(a=>a.currency==='UGX')?.netDebit,trial.totals.find(a=>a.currency==='UGX')?.netCredit)
+ db.close()
+})
 test('posts a payment once, blocks void until exact effective reversal',async()=>{const {db,adapter}=fixture();const a=await postCashEntry(adapter,'u',input);assert.equal((await postCashEntry(adapter,'u',input)).id,a.id);assert.deepEqual(db.prepare('SELECT side,account_id,amount_minor FROM journal_lines ORDER BY account_id').all().map(x=>({...x})),[{side:'credit',account_id:'cash',amount_minor:1000},{side:'debit',account_id:'other',amount_minor:1000}]);assert.equal((await listCashPosting(adapter,'u')).entries.find(x=>x.id==='e')?.journalId,a.id);assert.throws(()=>db.exec(voidSql),/revers/i);const rev={entryId:'e',effectiveDate:'2026-03-01',reason:'Incorrect mapping'};const r=await reverseCashEntry(adapter,'u',rev);assert.equal((await reverseCashEntry(adapter,'u',rev)).id,r.id);assert.equal((await postCashEntry(adapter,'u',input)).active,false);db.exec(voidSql);db.close()})
 test('rejects unauthorized, stale, different accounts, oversized and currency mismatches',async()=>{const {db,adapter}=fixture();await assert.rejects(postCashEntry(adapter,'x',input),/unauthorized/i);await assert.rejects(postCashEntry(adapter,'u',{...input,expectedDirection:'receipt'}),/changed/i);await assert.rejects(postCashEntry(adapter,'u',{...input,counterpartAccountId:'cash'}),/different|distinct/i);await assert.rejects(postCashEntry(adapter,'u',{...input,entryId:'big',expectedDirection:'receipt',expectedAmountMinor:'9007199254740992'}),/safe|large/i);await assert.rejects(postCashEntry(adapter,'u',{...input,counterpartAccountId:'usd'}));assert.equal((db.prepare('SELECT count(*) n FROM journal_entries').get() as {n:number}).n,0);await postCashEntry(adapter,'u',input);await assert.rejects(postCashEntry(adapter,'u',{...input,counterpartAccountId:'alt'}),/already used/i);db.close()})
 test('void after read prevents posting atomically',async()=>{const {db,adapter}=fixture();let injected=false;const racing={prepare:adapter.prepare.bind(adapter),async batch(statements:Parameters<D1Database['batch']>[0]){if(!injected){injected=true;db.exec(voidSql)}return adapter.batch(statements)}} as D1Database;await assert.rejects(postCashEntry(racing,'u',input),/active recorded cash/i);assert.equal((db.prepare('SELECT count(*) n FROM journal_entries').get() as {n:number}).n,0);db.close()})

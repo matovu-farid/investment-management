@@ -1,3 +1,4 @@
+import { SpinnerLabel } from '#/components/ui/spinner'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -46,8 +47,8 @@ function LendingSnapshot() {
 
   return <div className="app"><header><Link to="/" className="brand" style={{ color: 'inherit', textDecoration: 'none' }}><span className="brand-mark">R</span><span>RNIG <small>INVESTMENT GROUP</small></span></Link><Link to="/reports" className="quiet">Back to reports</Link></header><main className="dashboard">
     <p className="eyebrow">ADMINISTRATION</p><h1>Lending snapshot</h1>
-    <p>Review loans disbursed through a selected date, their reported balances and separately reported fund availability. These are source observations; the app does not calculate interest, allocate repayments or determine fund availability.</p>
-    <Card className="mt-6"><CardHeader><CardTitle>Select an as-of date</CardTitle><CardDescription>Review source reports and loans dated through the selected date.</CardDescription></CardHeader><CardContent><form onSubmit={load} className="max-w-md"><FieldGroup><Field><FieldLabel htmlFor="snapshot-date">As-of date</FieldLabel><DatePickerInput id="snapshot-date" type="date" required value={asOf} disabled={busy} onChange={e => { setAsOf(e.target.value); setResult(null); setError('') }} /></Field><Button disabled={busy || !asOf}>{busy ? 'Loading…' : 'View lending snapshot'}</Button></FieldGroup></form></CardContent></Card>
+    <p>Review loans disbursed through a selected date, their reported balances and separately reported fund availability. This snapshot uses source observations; it does not calculate interest, allocate repayments or determine fund availability. For provisional calculations, see <Link to="/loan-billing">loan billing and repayment</Link>.</p>
+    <Card className="mt-6"><CardHeader><CardTitle>Select an as-of date</CardTitle><CardDescription>Review source reports and loans dated through the selected date.</CardDescription></CardHeader><CardContent><form onSubmit={load} className="max-w-md"><FieldGroup><Field><FieldLabel htmlFor="snapshot-date">As-of date</FieldLabel><DatePickerInput id="snapshot-date" type="date" required value={asOf} disabled={busy} onChange={e => { setAsOf(e.target.value); setResult(null); setError('') }} /></Field><Button disabled={busy || !asOf}>{busy ? <SpinnerLabel>View lending snapshot</SpinnerLabel> : 'View lending snapshot'}</Button></FieldGroup></form></CardContent></Card>
     {error && <Alert variant="destructive" role="alert" className="mt-6"><AlertDescription>{error}</AlertDescription></Alert>}
     {result && <section aria-labelledby="lending-snapshot-heading">
       <h2 id="lending-snapshot-heading">Loans through {result.asOf}</h2>

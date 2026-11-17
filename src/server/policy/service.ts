@@ -1,9 +1,9 @@
-export type PolicyTarget = { id:string; assetClass:string; effectiveDate:string; minBasisPoints:number|null; maxBasisPoints:number|null; targetBasisPoints:number|null; source:string; notes:string|null; createdBy:string }
-export interface PolicyRepository { roleFor(userId:string):Promise<string|null>; list():Promise<PolicyTarget[]>; create(value:PolicyTarget,key:string):Promise<PolicyTarget> }
+export type PolicyTarget = { id:string; assetClass:string; effectiveDate:string; minBasisPoints:number|null; maxBasisPoints:number|null; targetBasisPoints:number|null; source:string; notes:string|null; createdBy:string; correctionId?:string|null }
+export interface PolicyRepository { roleFor(userId:string):Promise<string|null>; list(actorId:string):Promise<PolicyTarget[]>; create(value:PolicyTarget,key:string):Promise<PolicyTarget> }
 async function requireAdmin(repo:PolicyRepository, actorId:string|null):Promise<string> { if (!actorId || await repo.roleFor(actorId)!=='admin') throw new Error('Unauthorized'); return actorId }
 function text(value:unknown,max:number):string { if(typeof value!=='string'|| !value.trim() || value.trim().length>max) throw new Error('Invalid input'); return value.trim() }
 function bp(value:unknown):number { if(typeof value!=='string'|| !/^\d+$/.test(value) || Number(value)>10000) throw new Error('Invalid allocation'); return Number(value) }
-export async function listPolicyTargets(repo:PolicyRepository,actorId:string|null) { await requireAdmin(repo,actorId); return repo.list() }
+export async function listPolicyTargets(repo:PolicyRepository,actorId:string|null) { const actor=await requireAdmin(repo,actorId); return repo.list(actor) }
 export async function addPolicyTarget(repo:PolicyRepository,actorId:string|null,input:unknown) {
  const createdBy=await requireAdmin(repo,actorId)
  if(!input || typeof input!=='object' || Array.isArray(input)) throw new Error('Invalid input')

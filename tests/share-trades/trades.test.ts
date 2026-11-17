@@ -20,7 +20,7 @@ test('database enforces trade chronology, buyer identity, immutability and retry
  const repo=createTradeRepository(adapter), record={id:'t',saleId:'s',buyerType:'member' as const,buyerMemberId:'b',shares:3,tradeDate:'2026-02-03',priceMinor:200,considerationMinor:599,currency:'UGX',reference:'receipt',notes:null,createdBy:'admin'}
  assert.equal((await repo.create(record,key)).id,'t');assert.equal((await repo.create({...record,id:'t2'},key)).id,'t');await assert.rejects(repo.create({...record,shares:4},key))
  for(const [id,patch] of [['bad-date',{tradeDate:'2026-01-01'}],['self',{buyerMemberId:'a'}],['missing',{buyerMemberId:'unknown'}],['currency',{currency:'USD'}]] as const) await assert.rejects(repo.create({...record,...patch,id},id))
- const all=await repo.list('admin');assert.equal(all.trades[0].sellerName,'A');assert.equal(all.trades[0].buyerName,'B');await repo.create({...record,id:'group',buyerType:'group',buyerMemberId:null},'group-key');
+ db.exec("UPDATE members SET status='inactive' WHERE id='b'");const all=await repo.list('admin');assert.equal(all.members.find(m=>m.id==='b')?.status,'inactive');assert.equal(all.sales[0].sellerId,'a');assert.equal(all.trades[0].sellerName,'A');assert.equal(all.trades[0].buyerName,'B');await repo.create({...record,id:'group',buyerType:'group',buyerMemberId:null},'group-key');
  assert.throws(()=>db.exec("UPDATE share_trades SET shares=4 WHERE id='t'"));assert.throws(()=>db.exec("DELETE FROM share_trades WHERE id='t'"));assert.equal((db.prepare('SELECT count(*) AS n FROM share_events').get() as {n:number}).n,0);assert.equal((db.prepare('SELECT count(*) AS n FROM journal_entries').get() as {n:number}).n,0);db.close()
 })
 

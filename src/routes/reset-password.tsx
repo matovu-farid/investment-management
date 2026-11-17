@@ -1,3 +1,4 @@
+import { SpinnerLabel } from '#/components/ui/spinner'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { authClient } from '#/lib/auth-client'
@@ -48,7 +49,7 @@ function ResetPassword() {
         <Field><FieldLabel htmlFor="reset-password">New password</FieldLabel><Input id="reset-password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={password} onChange={e => setPassword(e.target.value)} disabled={busy} /></Field>
         <Field><FieldLabel htmlFor="reset-confirmation">Confirm password</FieldLabel><Input id="reset-confirmation" type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={confirmation} onChange={e => setConfirmation(e.target.value)} disabled={busy} /></Field>
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-        <Button type="submit" disabled={!ready || busy}>{busy ? 'Updating…' : 'Update password'}</Button>
+        <Button type="submit" disabled={!ready || busy}>{busy ? <SpinnerLabel>Update password</SpinnerLabel> : 'Update password'}</Button>
       </FieldGroup></form>
     </>}
     <p className="help"><Link to="/login">Back to sign in</Link>{available && !success && <> · <Link to="/forgot-password">Request a new link</Link></>}</p>

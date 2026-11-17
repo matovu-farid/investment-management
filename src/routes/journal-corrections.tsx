@@ -1,3 +1,4 @@
+import { loadRouteInParallel } from '#/lib/parallel-route-loading'
 import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import {createFileRoute,Link,redirect,useRouter} from '@tanstack/react-router'
@@ -10,7 +11,7 @@ import {Alert, AlertDescription} from '#/components/ui/alert'
 import {getSession} from '#/lib/auth.functions'
 import {listCorrectionsFn,postCorrectionFn,reverseCorrectionFn} from '#/server/journal-corrections/functions'
 import {usePendingRequest,PendingRequestNotice} from '#/lib/pending-requests/use-pending'
-export const Route=createFileRoute('/journal-corrections')({beforeLoad:async()=>{const s=await getSession();if(!s)throw redirect({to:'/login'});return {user:s.user}},loader:async()=>{try{return await listCorrectionsFn()}catch{return null}},component:Page})
+export const Route=createFileRoute('/journal-corrections')({beforeLoad:async () => { const { auth, data } = await loadRouteInParallel(async()=>{const s=await getSession();if(!s)throw redirect({to:'/login'});return {user:s.user}}, async()=>{try{return await listCorrectionsFn()}catch{return null}}); return { ...(auth ?? {}), __parallelData: data } },loader:({ context }) => context.__parallelData,component:Page})
 type Version=NonNullable<ReturnType<typeof Route.useLoaderData>>['versions'][number]
 type Credit={accountId:string;amount:string}
 type Request={idempotencyKey:string;kind:'loan'|'repayment';sourceId:string;predecessorReversalId:string;date:string;expectedAmount:number;expectedCurrency:string;expectedMemberId:string;debitAccountId:string;credits:{accountId:string;amountMinor:number}[]}

@@ -1,3 +1,4 @@
+import { loadRouteInParallel } from '#/lib/parallel-route-loading'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { getSession } from '#/lib/auth.functions'
 import { memberShareValuesFn } from '#/server/share-values/functions'
@@ -8,8 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 
 export const Route = createFileRoute('/my-share-values')({
-  beforeLoad: async () => { if (!await getSession()) throw redirect({ to: '/login' }) },
-  loader: async () => memberShareValuesFn().catch(() => null),
+  beforeLoad: async () => { const { auth, data } = await loadRouteInParallel(async () => { if (!await getSession()) throw redirect({ to: '/login' }) }, async () => memberShareValuesFn().catch(() => null)); return { ...(auth ?? {}), __parallelData: data } },
+  loader: ({ context }) => context.__parallelData,
   component: MyShareValues,
 })
 

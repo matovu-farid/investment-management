@@ -9,9 +9,10 @@ function setup() {
  const sql=new DatabaseSync(':memory:');sql.exec(`PRAGMA foreign_keys=ON; CREATE TABLE "user"(id TEXT PRIMARY KEY); INSERT INTO "user" VALUES('admin'),('other'); CREATE TABLE app_user_roles(user_id TEXT,role TEXT); INSERT INTO app_user_roles VALUES('admin','admin'),('other','member'); CREATE TABLE investments(id TEXT PRIMARY KEY,name TEXT,currency TEXT); CREATE TABLE investment_source_voids(source_kind TEXT,source_id TEXT,reason TEXT,created_at TEXT); CREATE TABLE investment_transactions(id TEXT,investment_id TEXT,transaction_date TEXT,transaction_type TEXT,amount_minor INTEGER,reference TEXT); CREATE TABLE cash_entries(id TEXT,entry_date TEXT,direction TEXT,amount_minor TEXT,currency TEXT,counterparty TEXT,reference TEXT,description TEXT); CREATE TABLE cash_entry_voids(entry_id TEXT); INSERT INTO investments VALUES('i','Bond','UGX'); INSERT INTO investment_transactions VALUES('t','i','2026-05-01','income',500,NULL);`)
  sql.exec(readFileSync('migrations/0028_budget_lines.sql','utf8'));sql.exec(readFileSync('migrations/0029_budget_voids.sql','utf8'))
  sql.exec(`INSERT INTO budget_lines(id,category,period_start,period_end,currency,amount_minor,source,created_by,request_key) VALUES('b','Income','2026-01-01','2026-12-31','UGX',1000,'source','admin','initial')`)
- const statement=(q:string,args:unknown[]=[])=>({bind(...p:unknown[]){return statement(q,p)},async first(){return sql.prepare(q).get(...args as never[])??null},async all(){return {results:sql.prepare(q).all(...args as never[])}},async run(){return sql.prepare(q).run(...args as never[])}})
+ let revokeAt='';const revoke=(q:string)=>{if(revokeAt&&q.includes(revokeAt)){revokeAt='';sql.exec("DELETE FROM app_user_roles WHERE user_id='admin'")}}
+ const statement=(q:string,args:unknown[]=[])=>({bind(...p:unknown[]){return statement(q,p)},async first(){revoke(q);return sql.prepare(q).get(...args as never[])??null},async all(){revoke(q);return {results:sql.prepare(q).all(...args as never[])}},async run(){revoke(q);return sql.prepare(q).run(...args as never[])}})
  const db={prepare:(q:string)=>statement(q),async batch(stmts:ReturnType<typeof statement>[]){return Promise.all(stmts.map(s=>s.all()))}} as unknown as D1Database
- return {sql,repo:createBudgetRepository(db)}
+ return {sql,repo:createBudgetRepository(db),revokeOn:(query:string)=>{revokeAt=query}}
 }
 const key='96292f80-014c-4c0d-929c-ccfe956ba85c'
 test('voided investment transaction disappears from budget comparison inputs',async()=>{
@@ -45,3 +46,12 @@ test('comparison reads current status and rejects void lines even for stale brow
  await voidBudget(repo,'admin',{budgetId:'b',reason:'error',requestKey:key});await assert.rejects(compareBudget(repo,'admin',{budgetId:'b',transactionIds:['t']}),/void|unavailable/i);await assert.rejects(compareBudget(repo,'other',{budgetId:'b',transactionIds:[]}),/unauthorized/i)
 })
 test('budget comparison retains database snapshot time',async()=>{const {repo}=setup();const data=await repo.list('admin');assert.match(data.snapshotAt,/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/);const result=await compareBudget(repo,'admin',{budgetId:'b',transactionIds:['t']});assert.match(result.snapshotAt,/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/)})
+test('budget writes and retries do not succeed after administrator revocation',async()=>{
+ const {sql,repo,revokeOn}=setup(), budget={id:'new',category:'Income',periodStart:'2026-01-01',periodEnd:'2026-12-31',currency:'UGX',amountMinor:200,source:'test',createdBy:'admin'}, voided={id:'v',budgetId:'b',reason:'test',createdBy:'admin'}
+ const restore=()=>sql.exec("INSERT INTO app_user_roles VALUES('admin','admin')")
+ revokeOn('INSERT INTO budget_lines');await assert.rejects(repo.create(budget,'new-key'));assert.equal((sql.prepare("SELECT count(*) AS n FROM budget_lines WHERE id='new'").get() as {n:number}).n,0);restore()
+ await repo.create(budget,'new-key');revokeOn('FROM budget_lines WHERE request_key=?');await assert.rejects(repo.create(budget,'new-key'));restore()
+ revokeOn('INSERT INTO budget_voids');await assert.rejects(repo.voidLine(voided,'void-key'));assert.equal((sql.prepare('SELECT count(*) AS n FROM budget_voids').get() as {n:number}).n,0);restore()
+ await repo.voidLine(voided,'void-key');revokeOn('FROM budget_voids WHERE request_key=?');await assert.rejects(repo.voidLine(voided,'void-key'));restore()
+ assert.equal((await repo.voidLine(voided,'void-key')).budgetId,'b')
+})

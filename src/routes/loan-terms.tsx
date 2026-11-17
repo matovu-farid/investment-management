@@ -1,3 +1,5 @@
+import { SpinnerLabel } from '#/components/ui/spinner'
+import { loadRouteInParallel } from '#/lib/parallel-route-loading'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -14,9 +16,8 @@ import { NativeSelect } from '#/components/ui/native-select'
 import { Textarea } from '#/components/ui/textarea'
 
 export const Route = createFileRoute('/loan-terms')({
-  beforeLoad: async () => { const session = await getSession(); if (!session) throw redirect({to:'/login'}); return {userId:session.user.id} },
-  loader: async () => listLoanTermsFn().catch(() => null),
-  pendingComponent: () => <main className="dashboard" role="status">Loading loan terms…</main>,
+  beforeLoad: async () => { const { auth, data } = await loadRouteInParallel(async () => { const session = await getSession(); if (!session) throw redirect({to:'/login'}); return {userId:session.user.id} }, async () => listLoanTermsFn().catch(() => null)); return { ...(auth ?? {}), __parallelData: data } },
+  loader: ({ context }) => context.__parallelData,
   component: LoanTerms,
 })
 type Data=NonNullable<Awaited<ReturnType<typeof listLoanTermsFn>>>
@@ -44,7 +45,7 @@ function LoanTerms(){
     <PendingRequestNotice title="Loan term change" pending={pending.pending} storageError={pending.storageError} disabled={busy||refreshFailed} onRetry={()=>pending.pending&&void send(pending.pending,false)} onDiscard={()=>setDiscardReview(true)}/>
     {discardReview && <Alert role="region" aria-label="Confirm discarding request"><AlertDescription className="flex flex-col gap-3"><p>The request may already have been recorded. Check the loan history before discarding.</p><div className="flex flex-wrap gap-2"><Button type="button" disabled={busy} onClick={()=>{try{pending.discard();setDiscardReview(false)}catch{setError('The pending request could not be discarded.')}}}>Discard request</Button><Button variant="outline" type="button" disabled={busy} onClick={()=>setDiscardReview(false)}>Keep request</Button></div></AlertDescription></Alert>}
     <Card><CardHeader><CardTitle role="heading" aria-level={2}>Record a change</CardTitle><CardDescription>Choose a loan, enter the agreed terms and review them before recording.</CardDescription></CardHeader><CardContent>
-     {review ? <section aria-label="Review loan term change" className="flex flex-col gap-3"><h2>Review loan term change</h2><p><strong>{review.expectedMemberName} · {review.expectedMemberNumber}</strong></p><p>Loan {review.loanId} · {review.expectedCurrency} {amount(review.expectedPrincipalMinor)} minor units original principal · disbursed {review.expectedDisbursementDate} · maturity {review.expectedMaturityDate||'not recorded'}</p><p>Originally recorded terms: {review.expectedOriginalTerms}</p><p>Effective date: <strong>{review.effectiveDate}</strong></p><p>Changed terms: {review.terms}</p><p>Reason: {review.reason}</p><p>Source: {review.source}</p><div className="flex flex-wrap gap-2"><Button type="button" disabled={locked} onClick={()=>void send(review,true)}>{busy?'Recording…':'Record reviewed change'}</Button><Button variant="outline" type="button" disabled={busy} onClick={()=>setReview(null)}>Edit</Button></div></section> :
+     {review ? <section aria-label="Review loan term change" className="flex flex-col gap-3"><h2>Review loan term change</h2><p><strong>{review.expectedMemberName} · {review.expectedMemberNumber}</strong></p><p>Loan {review.loanId} · {review.expectedCurrency} {amount(review.expectedPrincipalMinor)} minor units original principal · disbursed {review.expectedDisbursementDate} · maturity {review.expectedMaturityDate||'not recorded'}</p><p>Originally recorded terms: {review.expectedOriginalTerms}</p><p>Effective date: <strong>{review.effectiveDate}</strong></p><p>Changed terms: {review.terms}</p><p>Reason: {review.reason}</p><p>Source: {review.source}</p><div className="flex flex-wrap gap-2"><Button type="button" disabled={locked} onClick={()=>void send(review,true)}>{busy ? <SpinnerLabel>Record reviewed change</SpinnerLabel> : 'Record reviewed change'}</Button><Button variant="outline" type="button" disabled={busy} onClick={()=>setReview(null)}>Edit</Button></div></section> :
      <form onSubmit={prepare} className="max-w-2xl"><FieldGroup>
       <Field><FieldLabel htmlFor="term-loan">Loan</FieldLabel><NativeSelect id="term-loan" required value={loanId} disabled={locked} onChange={e=>{setLoanId(e.target.value);setEffectiveDate('');setError('');setMessage('')}}><option value="">Select a loan</option>{data.loans.map(l=><option key={l.id} value={l.id}>{loanLabel(l)}</option>)}</NativeSelect></Field>
       {loan && <><p>Originally recorded terms: {loan.terms}</p>

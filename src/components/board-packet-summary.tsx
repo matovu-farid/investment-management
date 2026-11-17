@@ -1,0 +1,9 @@
+import type {BoardPacketSummary} from '#/lib/board-packet-summary'
+import {Button} from '#/components/ui/button'
+import {Table,TableHeader,TableBody,TableHead,TableRow,TableCell} from '#/components/ui/table'
+import {summaryCsv} from '#/lib/board-packet-summary'
+export function BoardPacketSummaryView({summary,download=true}:{summary:BoardPacketSummary;download?:boolean}){
+ const d=summary.calculatedLending.data
+ function save(){const url=URL.createObjectURL(new Blob([summaryCsv(summary)],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`rnig-lending-summary-${summary.end}.csv`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+ return <div><p>Summary without named rows, {summary.start} to {summary.end}. Figures are provisional and based on current records as of {d.asOf}; they include accrued but unposted interest. Small groups may reveal individual balances. This summary is not an approved statement.</p><p>Captured {summary.calculatedLending.capturedFrom} to {summary.calculatedLending.capturedTo} UTC. Eligible: {d.eligible}; included: {d.included}; omitted for missing setup: {d.omitted.unconfigured}; pending repayments: {d.omitted.pendingRepayments}; unavailable: {d.omitted.unavailable}.</p>{d.totals.length?<Table><TableHeader><TableRow><TableHead>Currency</TableHead><TableHead>Principal minor units</TableHead><TableHead>Unpaid interest minor units</TableHead></TableRow></TableHeader><TableBody>{d.totals.map(t=><TableRow key={t.currency}><TableCell>{t.currency}</TableCell><TableCell>{t.principalMinor}</TableCell><TableCell>{t.interestMinor}</TableCell></TableRow>)}</TableBody></Table>:<p>No loans included.</p>}{download&&<Button type="button" variant="outline" onClick={save}>Download summary CSV</Button>}</div>
+}

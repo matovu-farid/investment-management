@@ -1,3 +1,8 @@
+import { SpinnerLabel } from '#/components/ui/spinner'
+import { loadRouteInParallel } from '#/lib/parallel-route-loading'
+import { Button } from '#/components/ui/button'
+import { NativeSelect, NativeSelectOption } from '#/components/ui/native-select'
+import { Textarea } from '#/components/ui/textarea'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -7,14 +12,12 @@ import { listTradeVoidOptionsFn, voidTradeFn } from '#/server/trade-void/functio
 import { listTradeReconciliationFn } from '#/server/trade-reconciliation/functions'
 
 export const Route = createFileRoute('/trade-void')({
-  beforeLoad: async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { userId: session.user.id } },
-  loader: async () => { try { const [trades, reconciliation] = await Promise.all([listTradeVoidOptionsFn(), listTradeReconciliationFn()]); return { trades, reconciliation } } catch { return null } },
-  pendingComponent: () => <main className="dashboard" role="status">Loading recorded trades…</main>,
+  beforeLoad: async () => { const { auth, data } = await loadRouteInParallel(async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { userId: session.user.id } }, async () => { try { const [trades, reconciliation] = await Promise.all([listTradeVoidOptionsFn(), listTradeReconciliationFn()]); return { trades, reconciliation } } catch { return null } }); return { ...(auth ?? {}), __parallelData: data } },
+  loader: ({ context }) => context.__parallelData,
   component: TradeVoid,
 })
 
 type Request = { tradeId: string; reason: string; idempotencyKey: string }
-const panel = { background: 'white', border: '1px solid #e2e9e2', borderRadius: 7, padding: 24, marginTop: 24 }
 
 function TradeVoid() {
   const data = Route.useLoaderData(), { userId } = Route.useRouteContext(), router = useRouter()
@@ -54,14 +57,14 @@ function TradeVoid() {
     {!data ? <Alert variant="destructive" role="alert"><AlertDescription>The trade register is unavailable or access could not be confirmed.</AlertDescription></Alert> : <>
       {error && <Alert variant="destructive" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}{message && <p role="status">{message}</p>}
       <PendingRequestNotice title="Trade void" pending={pending.pending} storageError={pending.storageError} disabled={busy || refreshFailed} onRetry={() => { if (pending.pending) void send(pending.pending, false) }} onDiscard={() => setDiscardReview(true)} />
-      {discardReview && <section style={panel} aria-label="Confirm discarding request"><p>The request may already have been recorded. Check the void history before discarding it.</p><button type="button" disabled={busy} onClick={discard}>Discard request</button>{' '}<button type="button" disabled={busy} onClick={() => setDiscardReview(false)}>Keep request</button></section>}
-      <section style={panel}><h2>Review a trade</h2>{review ? <div role="region" aria-label="Confirm trade void"><p><strong>{description(review.tradeId)}</strong></p><p>Reason: {review.reason}</p><p>Confirm this recorded trade is erroneous. This cannot be undone.</p><button type="button" disabled={locked} onClick={() => void send(review, true)}>{busy ? 'Saving…' : 'Confirm void'}</button>{' '}<button type="button" disabled={busy} onClick={() => setReview(null)}>Edit</button></div> : <form onSubmit={prepare} style={{ display: 'grid', gap: 12, maxWidth: 720 }}>
-        <label>Trade <select required value={tradeId} disabled={locked} onChange={e => setTradeId(e.target.value)}><option value="">Select a recorded trade</option>{trades.filter(t => !t.voidedAt).map(t => <option key={t.id} value={t.id}>{description(t.id)}</option>)}</select></label>
+      {discardReview && <section className="record-panel" aria-label="Confirm discarding request"><p>The request may already have been recorded. Check the void history before discarding it.</p><Button type="button" disabled={busy} onClick={discard}>Discard request</Button>{' '}<Button type="button" disabled={busy} onClick={() => setDiscardReview(false)}>Keep request</Button></section>}
+      <section className="record-panel"><h2>Review a trade</h2>{review ? <div role="region" aria-label="Confirm trade void"><p><strong>{description(review.tradeId)}</strong></p><p>Reason: {review.reason}</p><p>Confirm this recorded trade is erroneous. This cannot be undone.</p><Button type="button" disabled={locked} onClick={() => void send(review, true)}>{busy ? <SpinnerLabel>Confirm void</SpinnerLabel> : 'Confirm void'}</Button>{' '}<Button type="button" disabled={busy} onClick={() => setReview(null)}>Edit</Button></div> : <form onSubmit={prepare} style={{ display: 'grid', gap: 12, maxWidth: 720 }}>
+        <label>Trade <NativeSelect required value={tradeId} disabled={locked} onChange={e => setTradeId(e.target.value)}><NativeSelectOption value="">Select a recorded trade</NativeSelectOption>{trades.filter(t => !t.voidedAt).map(t => <NativeSelectOption key={t.id} value={t.id}>{description(t.id)}</NativeSelectOption>)}</NativeSelect></label>
         {activeReconciliation && <Alert variant="destructive" role="alert"><AlertDescription>This trade is linked to share events. <Link to="/trade-reconciliation">Revoke the active reconciliation</Link> before voiding it, then reload this page.</AlertDescription></Alert>}
         {selected?.activePublicationId && <Alert variant="destructive" role="alert"><AlertDescription>This trade is currently published. <Link to="/trade-publications">Withdraw its publication</Link> before voiding it, then reload this page.</AlertDescription></Alert>}
-        <label>Reason <textarea required maxLength={450} value={reason} disabled={locked} onChange={e => setReason(e.target.value)} /></label><button disabled={locked || !selected || !!selected.activePublicationId || !!activeReconciliation}>Review void</button>
+        <label>Reason <Textarea required maxLength={450} value={reason} disabled={locked} onChange={e => setReason(e.target.value)} /></label><Button disabled={locked || !selected || !!selected.activePublicationId || !!activeReconciliation}>Review void</Button>
       </form>}</section>
-      <section style={panel}><h2>Voided trades</h2>{!trades.some(t => t.voidedAt) ? <p>No trades have been voided.</p> : <ul>{trades.filter(t => t.voidedAt).map(t => <li key={t.id}>{description(t.id)} · voided {t.voidedAt} UTC · {t.voidReason}</li>)}</ul>}</section>
+      <section className="record-panel"><h2>Voided trades</h2>{!trades.some(t => t.voidedAt) ? <p>No trades have been voided.</p> : <ul>{trades.filter(t => t.voidedAt).map(t => <li key={t.id}>{description(t.id)} · voided {t.voidedAt} UTC · {t.voidReason}</li>)}</ul>}</section>
     </>}
   </main></div>
 }

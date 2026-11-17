@@ -17,7 +17,7 @@ export async function listInvestmentCorrectionWork(db:D1Database,actorId:string|
   ) SELECT v.*,r.id AS reversalId,r.effective_date AS reversalDate,EXISTS(SELECT 1 FROM investment_journal_corrections c WHERE c.predecessor_reversal_id=r.id) AS hasSuccessor FROM versions v LEFT JOIN journal_entries r ON r.reverses_entry_id=v.journalId AND r.status='posted' WHERE EXISTS(SELECT 1 FROM app_user_roles WHERE user_id=? AND role='admin') ORDER BY v.transactionId,v.journalDate,v.journalId`).bind(actor),
   db.prepare("SELECT id,code,name,currency FROM ledger_accounts WHERE EXISTS(SELECT 1 FROM app_user_roles WHERE user_id=? AND role='admin') ORDER BY code").bind(actor),
   db.prepare("SELECT j.id AS entryId,a.code AS accountCode,a.name AS accountName,l.side,l.amount_minor AS amountMinor FROM investment_journal_corrections c JOIN journal_entries j ON j.id=c.journal_id JOIN journal_lines l ON l.entry_id=j.id JOIN ledger_accounts a ON a.id=l.account_id WHERE j.status='posted' AND EXISTS(SELECT 1 FROM app_user_roles WHERE user_id=? AND role='admin') ORDER BY j.id,l.id").bind(actor),
-  db.prepare("SELECT date('now') AS asOfDate WHERE EXISTS(SELECT 1 FROM app_user_roles WHERE user_id=? AND role='admin')").bind(actor),
+  db.prepare("SELECT date('now','+3 hours') AS asOfDate WHERE EXISTS(SELECT 1 FROM app_user_roles WHERE user_id=? AND role='admin')").bind(actor),
  ])
  const asOfDate=(today.results as {asOfDate:string}[])[0]?.asOfDate;if(!asOfDate)throw new Error('Unauthorized')
  return {versions:versions.results as Version[],accounts:accounts.results as Account[],lines:lines.results as DisplayLine[],asOfDate}

@@ -11,11 +11,20 @@ function fixture(){
  for(const f of ['0043_investment_source_voids.sql','0051_investment_posting.sql','0052_investment_corrections.sql'])db.exec(readFileSync(`migrations/${f}`,'utf8'))
  db.exec(`INSERT INTO "user"(id,name,email,createdAt,updatedAt) VALUES('u','Admin','a@example.test',1,1),('x','Member','b@example.test',1,1); INSERT INTO app_user_roles(user_id,role,granted_by) VALUES('u','admin','bootstrap'); INSERT INTO investments(id,name,asset_class,currency,created_by) VALUES('i','Asset','property','UGX','u'); INSERT INTO investment_transactions(id,investment_id,transaction_date,transaction_type,amount_minor,created_by) VALUES('t','i','2026-02-01','Rent',1000,'u'); INSERT INTO ledger_accounts(id,code,name,currency) VALUES('cash','1','Cash','UGX'),('income','2','Income','UGX'),('other','3','Other','UGX'),('usd','4','Foreign','USD');`)
  type Stmt={query:string;values:unknown[];bind:(...v:unknown[])=>Stmt;first:()=>Promise<unknown>;all:()=>Promise<{results:unknown[]}>}
- const adapter={prepare(query:string):Stmt{return {query,values:[],bind(...v){this.values=v;return this},async first(){return db.prepare(this.query).get(...this.values as never[])??null},async all(){return {results:db.prepare(this.query).all(...this.values as never[])}}}},async batch(s:Stmt[]){db.exec('BEGIN');try{const out=s.map(x=>({results:db.prepare(x.query).all(...x.values as never[])}));db.exec('COMMIT');return out}catch(e){db.exec('ROLLBACK');throw e}}} as unknown as D1Database
- return {db,adapter}
+ let revokeOnFind=0
+ const adapter={prepare(query:string):Stmt{return {query,values:[],bind(...v){this.values=v;return this},async first(){if(this.query.includes('WHERE c.request_key=?')&&revokeOnFind>0&&--revokeOnFind===0)db.exec("DELETE FROM app_user_roles WHERE user_id='u'");return db.prepare(this.query).get(...this.values as never[])??null},async all(){return {results:db.prepare(this.query).all(...this.values as never[])}}}},async batch(s:Stmt[]){db.exec('BEGIN');try{const out=s.map(x=>({results:db.prepare(x.query).all(...x.values as never[])}));db.exec('COMMIT');return out}catch(e){db.exec('ROLLBACK');throw e}}} as unknown as D1Database
+ return {db,adapter,revokeAtFind:(n:number)=>{revokeOnFind=n}}
 }
 const original={transactionId:'t',debitAccountId:'cash',creditAccountId:'income',expectedInvestmentId:'i',expectedDate:'2026-02-01',expectedType:'Rent',expectedAmountMinor:1000,expectedCurrency:'UGX'}
 const key='123e4567-e89b-42d3-a456-426614174000'
+test('investment correction history uses the Kampala business date at midnight',async()=>{
+ const {db,adapter}=fixture()
+ const at=(instant:string)=>new Proxy(adapter,{get(target,property,receiver){if(property==='prepare')return (query:string)=>target.prepare(query.replace("date('now'",`date('${instant}'`));return Reflect.get(target,property,receiver)}})
+ assert.equal((await listInvestmentCorrectionWork(at('2026-01-14 20:59:59'),'u')).asOfDate,'2026-01-14')
+ assert.equal((await listInvestmentCorrectionWork(at('2026-01-14 21:00:00'),'u')).asOfDate,'2026-01-15')
+ await assert.rejects(listInvestmentCorrectionWork(at('2026-01-14 21:00:00'),'x'),/unauthorized/i)
+ db.close()
+})
 test('replaces a reversed journal with reviewed accounts and preserves history across retries and reversals',async()=>{
  const {db,adapter}=fixture();const old=await postInvestmentTransaction(adapter,'u',original);const rev=await reverseInvestmentTransaction(adapter,'u',{transactionId:'t',effectiveDate:'2026-03-01',reason:'Incorrect mapping'})
  const input={...original,creditAccountId:'other',predecessorReversalId:rev.id,requestKey:key,date:'2026-03-02'}
@@ -63,6 +72,14 @@ test('linked draft correction metadata cannot be edited to bypass source checks'
 test('administrator revoked between authorization and read receives no snapshot',async()=>{
  const {db,adapter}=fixture();const racing={prepare:adapter.prepare.bind(adapter),async batch(s:Parameters<D1Database['batch']>[0]){db.exec("DELETE FROM app_user_roles WHERE user_id='u'");return adapter.batch(s)}} as D1Database
  await assert.rejects(listInvestmentCorrectionWork(racing,'u'),/unauthorized/i)
+ db.close()
+})
+
+test('investment correction retry does not return a journal after administrator revocation',async()=>{
+ const {db,adapter,revokeAtFind}=fixture();await postInvestmentTransaction(adapter,'u',original);const rev=await reverseInvestmentTransaction(adapter,'u',{transactionId:'t',effectiveDate:'2026-03-01',reason:'Correction'});const input={...original,predecessorReversalId:rev.id,requestKey:key,date:'2026-03-02'}
+ const result=await postInvestmentCorrection(adapter,'u',input)
+ for(const read of [1,2]){revokeAtFind(read);await assert.rejects(postInvestmentCorrection(adapter,'u',input));db.exec("INSERT INTO app_user_roles(user_id,role,granted_by) VALUES('u','admin','bootstrap')")}
+ assert.equal((await postInvestmentCorrection(adapter,'u',input)).journalId,result.journalId)
  db.close()
 })
 

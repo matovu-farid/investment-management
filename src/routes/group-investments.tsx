@@ -1,3 +1,4 @@
+import { loadRouteInParallel } from '#/lib/parallel-route-loading'
 import { confirmAction } from '#/components/confirmation-host'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -14,12 +15,14 @@ import { NativeSelect, NativeSelectOption } from '#/components/ui/native-select'
 import { Badge } from '#/components/ui/badge'
 
 export const Route = createFileRoute('/group-investments')({
-  beforeLoad: async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { user: session.user } },
-  loader: async () => {
-    const [dashboard, member] = await Promise.all([getDashboardFn().catch(() => null), memberInvestmentPublicationsFn().catch(() => null)])
-    const admin = dashboard?.kind === 'admin' ? await adminInvestmentPublicationsFn().catch(() => null) : null
+  beforeLoad: async () => { const { auth, data } = await loadRouteInParallel(async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { user: session.user } }, async () => {
+    // Each server function enforces its own access checks; start the admin read
+    // concurrently and only present it if the independently loaded role allows it.
+    const [dashboard, member, adminData] = await Promise.all([getDashboardFn().catch(() => null), memberInvestmentPublicationsFn().catch(() => null), adminInvestmentPublicationsFn().catch(() => null)])
+    const admin = dashboard?.kind === 'admin' ? adminData : null
     return { dashboard, member, admin }
-  },
+  }); return { ...(auth ?? {}), __parallelData: data } },
+  loader: ({ context }) => context.__parallelData,
   component: GroupInvestments,
 })
 const amount = (s: string) => BigInt(s).toLocaleString('en-US')

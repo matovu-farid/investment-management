@@ -1,3 +1,4 @@
+import { loadRouteInParallel } from '#/lib/parallel-route-loading'
 import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
@@ -14,8 +15,8 @@ import { Input } from '#/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '#/components/ui/native-select'
 
 export const Route = createFileRoute('/share-values')({
-  beforeLoad: async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { user: session.user } },
-  loader: async () => adminShareValuesFn().catch(() => null),
+  beforeLoad: async () => { const { auth, data } = await loadRouteInParallel(async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { user: session.user } }, async () => adminShareValuesFn().catch(() => null)); return { ...(auth ?? {}), __parallelData: data } },
+  loader: ({ context }) => context.__parallelData,
   component: ShareValues,
 })
 
@@ -52,7 +53,7 @@ function ShareValues() {
     catch { setError('Withdrawal could not be confirmed. Check the history and retry the retained request unchanged.') } finally { setBusy(false) }
   }
   return <div className="app"><header><Link to="/" className="brand" style={{ color: 'inherit', textDecoration: 'none' }}><span className="brand-mark">R</span><span>RNIG <small>INVESTMENT GROUP</small></span></Link><Link to="/" className="quiet">Back to overview</Link></header><main className="dashboard"><p className="eyebrow">ADMINISTRATION</p><h1>Indicative share values</h1>
-    <Alert className="mt-6"><AlertDescription>Publish a manually supplied price against a published holding. The resulting value is indicative: it is not necessarily current or approved and must not be used as borrowing capacity. Joint holdings show the whole position, without apportionment.</AlertDescription></Alert>
+    <Alert className="mt-6"><AlertDescription>Publish a manually supplied price against a published holding. The resulting value is indicative and is not necessarily current, approved or itself a borrowing limit. The provisional capacity worksheet can use a reviewed price, but eligibility, valuation and exposure still require review. Joint holdings show the whole position, without apportionment.</AlertDescription></Alert>
     {!data ? <Alert className="mt-6" variant="destructive" role="alert"><AlertDescription>Share values are unavailable or access could not be confirmed. Reload and try again.</AlertDescription></Alert> : <>
       {message && <Alert className="mt-6" role="status"><AlertDescription>{message}</AlertDescription></Alert>}{error && <Alert className="mt-6" variant="destructive" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}
       <Card className="mt-6"><CardHeader><CardTitle><h2>Publish an indicative value</h2></CardTitle><CardDescription>The price is entered in the currency’s minor units per share. Both source descriptions and the basis are visible to recipients; review them for private information.</CardDescription></CardHeader><CardContent>

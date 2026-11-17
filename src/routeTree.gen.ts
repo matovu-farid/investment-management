@@ -47,6 +47,9 @@ import { Route as LendingImportRouteImport } from './routes/lending-import'
 import { Route as LendingSnapshotRouteImport } from './routes/lending-snapshot'
 import { Route as LendingVoidRouteImport } from './routes/lending-void'
 import { Route as LoanBalancesRouteImport } from './routes/loan-balances'
+import { Route as LoanBillingRouteImport } from './routes/loan-billing'
+import { Route as LoanEstimateRouteImport } from './routes/loan-estimate'
+import { Route as LoanOpeningsRouteImport } from './routes/loan-openings'
 import { Route as LoanPostingRouteImport } from './routes/loan-posting'
 import { Route as LoanReconciliationRouteImport } from './routes/loan-reconciliation'
 import { Route as LoanTermsRouteImport } from './routes/loan-terms'
@@ -78,6 +81,7 @@ import { Route as TradePublicationsRouteImport } from './routes/trade-publicatio
 import { Route as TradeReconciliationRouteImport } from './routes/trade-reconciliation'
 import { Route as TradeVoidRouteImport } from './routes/trade-void'
 import { Route as TrialBalanceRouteImport } from './routes/trial-balance'
+import { Route as UnappliedReceiptsRouteImport } from './routes/unapplied-receipts'
 import { Route as ApiDocumentsRouteImport } from './routes/api/documents'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
@@ -271,6 +275,21 @@ const LoanBalancesRoute = LoanBalancesRouteImport.update({
   path: '/loan-balances',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoanBillingRoute = LoanBillingRouteImport.update({
+  id: '/loan-billing',
+  path: '/loan-billing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoanEstimateRoute = LoanEstimateRouteImport.update({
+  id: '/loan-estimate',
+  path: '/loan-estimate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoanOpeningsRoute = LoanOpeningsRouteImport.update({
+  id: '/loan-openings',
+  path: '/loan-openings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoanPostingRoute = LoanPostingRouteImport.update({
   id: '/loan-posting',
   path: '/loan-posting',
@@ -427,6 +446,11 @@ const TrialBalanceRoute = TrialBalanceRouteImport.update({
   path: '/trial-balance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UnappliedReceiptsRoute = UnappliedReceiptsRouteImport.update({
+  id: '/unapplied-receipts',
+  path: '/unapplied-receipts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiDocumentsRoute = ApiDocumentsRouteImport.update({
   id: '/api/documents',
   path: '/api/documents',
@@ -477,6 +501,9 @@ export interface FileRoutesByFullPath {
   '/lending-snapshot': typeof LendingSnapshotRoute
   '/lending-void': typeof LendingVoidRoute
   '/loan-balances': typeof LoanBalancesRoute
+  '/loan-billing': typeof LoanBillingRoute
+  '/loan-estimate': typeof LoanEstimateRoute
+  '/loan-openings': typeof LoanOpeningsRoute
   '/loan-posting': typeof LoanPostingRoute
   '/loan-reconciliation': typeof LoanReconciliationRoute
   '/loan-terms': typeof LoanTermsRoute
@@ -508,6 +535,7 @@ export interface FileRoutesByFullPath {
   '/trade-reconciliation': typeof TradeReconciliationRoute
   '/trade-void': typeof TradeVoidRoute
   '/trial-balance': typeof TrialBalanceRoute
+  '/unapplied-receipts': typeof UnappliedReceiptsRoute
   '/api/documents': typeof ApiDocumentsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -550,6 +578,9 @@ export interface FileRoutesByTo {
   '/lending-snapshot': typeof LendingSnapshotRoute
   '/lending-void': typeof LendingVoidRoute
   '/loan-balances': typeof LoanBalancesRoute
+  '/loan-billing': typeof LoanBillingRoute
+  '/loan-estimate': typeof LoanEstimateRoute
+  '/loan-openings': typeof LoanOpeningsRoute
   '/loan-posting': typeof LoanPostingRoute
   '/loan-reconciliation': typeof LoanReconciliationRoute
   '/loan-terms': typeof LoanTermsRoute
@@ -581,6 +612,7 @@ export interface FileRoutesByTo {
   '/trade-reconciliation': typeof TradeReconciliationRoute
   '/trade-void': typeof TradeVoidRoute
   '/trial-balance': typeof TrialBalanceRoute
+  '/unapplied-receipts': typeof UnappliedReceiptsRoute
   '/api/documents': typeof ApiDocumentsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -624,6 +656,9 @@ export interface FileRoutesById {
   '/lending-snapshot': typeof LendingSnapshotRoute
   '/lending-void': typeof LendingVoidRoute
   '/loan-balances': typeof LoanBalancesRoute
+  '/loan-billing': typeof LoanBillingRoute
+  '/loan-estimate': typeof LoanEstimateRoute
+  '/loan-openings': typeof LoanOpeningsRoute
   '/loan-posting': typeof LoanPostingRoute
   '/loan-reconciliation': typeof LoanReconciliationRoute
   '/loan-terms': typeof LoanTermsRoute
@@ -655,6 +690,7 @@ export interface FileRoutesById {
   '/trade-reconciliation': typeof TradeReconciliationRoute
   '/trade-void': typeof TradeVoidRoute
   '/trial-balance': typeof TrialBalanceRoute
+  '/unapplied-receipts': typeof UnappliedReceiptsRoute
   '/api/documents': typeof ApiDocumentsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -699,6 +735,9 @@ export interface FileRouteTypes {
     | '/lending-snapshot'
     | '/lending-void'
     | '/loan-balances'
+    | '/loan-billing'
+    | '/loan-estimate'
+    | '/loan-openings'
     | '/loan-posting'
     | '/loan-reconciliation'
     | '/loan-terms'
@@ -730,6 +769,7 @@ export interface FileRouteTypes {
     | '/trade-reconciliation'
     | '/trade-void'
     | '/trial-balance'
+    | '/unapplied-receipts'
     | '/api/documents'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
@@ -772,6 +812,9 @@ export interface FileRouteTypes {
     | '/lending-snapshot'
     | '/lending-void'
     | '/loan-balances'
+    | '/loan-billing'
+    | '/loan-estimate'
+    | '/loan-openings'
     | '/loan-posting'
     | '/loan-reconciliation'
     | '/loan-terms'
@@ -803,6 +846,7 @@ export interface FileRouteTypes {
     | '/trade-reconciliation'
     | '/trade-void'
     | '/trial-balance'
+    | '/unapplied-receipts'
     | '/api/documents'
     | '/api/auth/$'
   id:
@@ -845,6 +889,9 @@ export interface FileRouteTypes {
     | '/lending-snapshot'
     | '/lending-void'
     | '/loan-balances'
+    | '/loan-billing'
+    | '/loan-estimate'
+    | '/loan-openings'
     | '/loan-posting'
     | '/loan-reconciliation'
     | '/loan-terms'
@@ -876,6 +923,7 @@ export interface FileRouteTypes {
     | '/trade-reconciliation'
     | '/trade-void'
     | '/trial-balance'
+    | '/unapplied-receipts'
     | '/api/documents'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -919,6 +967,9 @@ export interface RootRouteChildren {
   LendingSnapshotRoute: typeof LendingSnapshotRoute
   LendingVoidRoute: typeof LendingVoidRoute
   LoanBalancesRoute: typeof LoanBalancesRoute
+  LoanBillingRoute: typeof LoanBillingRoute
+  LoanEstimateRoute: typeof LoanEstimateRoute
+  LoanOpeningsRoute: typeof LoanOpeningsRoute
   LoanPostingRoute: typeof LoanPostingRoute
   LoanReconciliationRoute: typeof LoanReconciliationRoute
   LoanTermsRoute: typeof LoanTermsRoute
@@ -950,6 +1001,7 @@ export interface RootRouteChildren {
   TradeReconciliationRoute: typeof TradeReconciliationRoute
   TradeVoidRoute: typeof TradeVoidRoute
   TrialBalanceRoute: typeof TrialBalanceRoute
+  UnappliedReceiptsRoute: typeof UnappliedReceiptsRoute
   ApiDocumentsRoute: typeof ApiDocumentsRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -1222,6 +1274,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoanBalancesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/loan-billing': {
+      id: '/loan-billing'
+      path: '/loan-billing'
+      fullPath: '/loan-billing'
+      preLoaderRoute: typeof LoanBillingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/loan-estimate': {
+      id: '/loan-estimate'
+      path: '/loan-estimate'
+      fullPath: '/loan-estimate'
+      preLoaderRoute: typeof LoanEstimateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/loan-openings': {
+      id: '/loan-openings'
+      path: '/loan-openings'
+      fullPath: '/loan-openings'
+      preLoaderRoute: typeof LoanOpeningsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/loan-posting': {
       id: '/loan-posting'
       path: '/loan-posting'
@@ -1439,6 +1512,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TrialBalanceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/unapplied-receipts': {
+      id: '/unapplied-receipts'
+      path: '/unapplied-receipts'
+      fullPath: '/unapplied-receipts'
+      preLoaderRoute: typeof UnappliedReceiptsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/documents': {
       id: '/api/documents'
       path: '/api/documents'
@@ -1495,6 +1575,9 @@ const rootRouteChildren: RootRouteChildren = {
   LendingSnapshotRoute: LendingSnapshotRoute,
   LendingVoidRoute: LendingVoidRoute,
   LoanBalancesRoute: LoanBalancesRoute,
+  LoanBillingRoute: LoanBillingRoute,
+  LoanEstimateRoute: LoanEstimateRoute,
+  LoanOpeningsRoute: LoanOpeningsRoute,
   LoanPostingRoute: LoanPostingRoute,
   LoanReconciliationRoute: LoanReconciliationRoute,
   LoanTermsRoute: LoanTermsRoute,
@@ -1526,6 +1609,7 @@ const rootRouteChildren: RootRouteChildren = {
   TradeReconciliationRoute: TradeReconciliationRoute,
   TradeVoidRoute: TradeVoidRoute,
   TrialBalanceRoute: TrialBalanceRoute,
+  UnappliedReceiptsRoute: UnappliedReceiptsRoute,
   ApiDocumentsRoute: ApiDocumentsRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

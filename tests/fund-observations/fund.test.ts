@@ -7,8 +7,9 @@ function setup() {
   const sql = new DatabaseSync(':memory:')
   for (const file of readdirSync('migrations').filter(x => x.endsWith('.sql')).sort()) sql.exec(readFileSync(`migrations/${file}`, 'utf8'))
   sql.exec(`INSERT INTO "user"(id,name,email,createdAt,updatedAt) VALUES('a','Admin','a@example.test',1,1),('m','Member','m@example.test',1,1); INSERT INTO app_user_roles(user_id,role,granted_by) VALUES('a','admin','a')`)
-  const stmt = (query:string,args:unknown[] = []) => ({ bind(...p:unknown[]){ return stmt(query,p) }, async first(){return sql.prepare(query).get(...args as never[]) ?? null}, async all(){return {results:sql.prepare(query).all(...args as never[])}}, async run(){return sql.prepare(query).run(...args as never[])} })
-  return {sql,db:{prepare:(query:string)=>stmt(query)} as unknown as D1Database}
+  let revokeAt='';const revoke=(query:string)=>{if(revokeAt&&query.includes(revokeAt)){revokeAt='';sql.exec("DELETE FROM app_user_roles WHERE user_id='a'")}}
+  const stmt = (query:string,args:unknown[] = []) => ({ bind(...p:unknown[]){ return stmt(query,p) }, async first(){revoke(query);return sql.prepare(query).get(...args as never[]) ?? null}, async all(){revoke(query);return {results:sql.prepare(query).all(...args as never[])}}, async run(){revoke(query);return sql.prepare(query).run(...args as never[])} })
+  return {sql,db:{prepare:(query:string)=>stmt(query)} as unknown as D1Database,revokeOn:(q:string)=>{revokeAt=q}}
 }
 const request = {observedDate:'2020-01-01',amountMinor:'123456789012345678901234567890',currency:'UGX',basis:'Reported available funds',source:'Test fund statement',requestKey:'fa5c5220-5ec2-4f62-97d0-5b72ccff4f5b'}
 
@@ -39,4 +40,12 @@ test('database guards reject unauthorized and future-dated direct inserts',()=>{
   const {sql}=setup()
   assert.throws(()=>sql.exec("INSERT INTO fund_availability_observations(id,observed_date,amount_minor,currency,basis,source,request_key,created_by) VALUES('x','2020-01-01','1','UGX','basis','source','key','m')"),/unauthorized/i)
   assert.throws(()=>sql.exec("INSERT INTO fund_availability_observations(id,observed_date,amount_minor,currency,basis,source,request_key,created_by) VALUES('x','9999-12-31','1','UGX','basis','source','key','a')"),/date/i)
+})
+
+test('fund observation and void retries do not disclose saved records after revocation',async()=>{
+  const {db,sql,revokeOn}=setup();const s=await import('../../src/server/fund-observations/service.ts');const saved=await s.recordFundObservation(db,'a',request)
+  revokeOn('WHERE o.request_key=?');await assert.rejects(s.recordFundObservation(db,'a',request));sql.exec("INSERT INTO app_user_roles(user_id,role,granted_by) VALUES('a','admin','a')")
+  const v={observationId:saved.id,reason:'Incorrect source',requestKey:'1a5c5220-5ec2-4f62-97d0-5b72ccff4f5b'};const voided=await s.voidFundObservation(db,'a',v)
+  revokeOn('FROM fund_availability_voids WHERE request_key=?');await assert.rejects(s.voidFundObservation(db,'a',v));sql.exec("INSERT INTO app_user_roles(user_id,role,granted_by) VALUES('a','admin','a')")
+  assert.equal((await s.voidFundObservation(db,'a',v)).id,voided.id)
 })

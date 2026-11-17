@@ -1,3 +1,6 @@
+import { SpinnerLabel } from '#/components/ui/spinner'
+import { ApprovalGuidance } from '#/components/approval-guidance'
+import { equityDipReview } from '#/server/investments/equity-warning'
 import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
@@ -11,17 +14,17 @@ import { Textarea } from '#/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 import { Alert, AlertDescription, AlertTitle } from '#/components/ui/alert'
 import { getSession } from '#/lib/auth.functions'
+import { loadAuthenticated } from '#/lib/parallel-route-loading'
 import { createInvestmentFn, createValuationFn, createTransactionFn, listInvestmentsFn } from '#/server/investments/functions'
 import {PendingRequestNotice,usePendingRequest} from '#/lib/pending-requests/use-pending'
 import { compareValuations, type ComparableValuation } from '#/server/investments/comparison'
 
 export const Route = createFileRoute('/investments')({
-  beforeLoad: async () => { const session=await getSession(); if (!session) throw redirect({ to: '/login' }); return {userId:session.user.id} },
-  loader: async () => {
+  beforeLoad: async () => { if (!await getSession()) throw redirect({ to: '/login' }) },
+  loader: async () => { const { session, data } = await loadAuthenticated(getSession, async () => {
     try { return { investments: await listInvestmentsFn(), available: true } }
     catch { return { investments: [], available: false } }
-  },
-  pendingComponent: () => <main className="dashboard" role="status">Loading investment register…</main>,
+  }, () => { throw redirect({ to: '/login' }) }); return { userId: session.user.id, ...data } },
   component: InvestmentRegister,
 })
 
@@ -34,7 +37,7 @@ function ValueComparison({ valuations }: { valuations: ComparableValuation[] }) 
   const [marketId, setMarketId] = useState('')
   const comparison = compareValuations(valuations.find(v => v.id === costId), valuations.find(v => v.id === marketId))
   const option = (v: ComparableValuation) => `${v.valuationDate} · ${v.currency} ${v.amountMinor.toLocaleString('en-US')} minor units · ${v.basis} · ${v.source || 'No source recorded'}`
-  return <section aria-label="Compare reported values" style={{ marginTop: 24 }}><h4>Compare reported cost and market value</h4>
+  return <><section aria-label="Compare reported values" style={{ marginTop: 24 }}><h4>Compare reported cost and market value</h4>
     <p>Select the two recorded observations yourself. The difference is market value minus cost; it is not a cash receipt, an approved accounting gain, or a calculation of cost from transactions. Confirm the dates, bases and sources before using it.</p>
     {valuations.length < 2 ? <p>Record at least two observations to compare.</p> : <div style={{ display: 'grid', gap: 12, maxWidth: 720 }}>
       <Field><FieldLabel htmlFor={`${comparisonId}-cost`}>Reported cost observation</FieldLabel><NativeSelect id={`${comparisonId}-cost`} value={costId} onChange={e => setCostId(e.target.value)}><NativeSelectOption value="">Select a recorded value</NativeSelectOption>{valuations.map(v => <NativeSelectOption key={v.id} value={v.id}>{option(v)}</NativeSelectOption>)}</NativeSelect></Field>
@@ -42,11 +45,17 @@ function ValueComparison({ valuations }: { valuations: ComparableValuation[] }) 
       {costId && marketId && !comparison && <Alert variant="destructive" role="alert"><AlertDescription>Choose two different observations for the same investment and currency.</AlertDescription></Alert>}
       {comparison && <div aria-live="polite" className="flex flex-col gap-3"><p>Cost: {option(comparison.cost)}</p><p>Market value: {option(comparison.market)}</p><div className="flex flex-col gap-2" role="group" aria-label="Comparison of recorded cost and market value"><label className="flex flex-col gap-1">Cost<progress className="h-3 w-full accent-primary" value={comparison.cost.amountMinor} max={Math.max(comparison.cost.amountMinor, comparison.market.amountMinor, 1)} aria-label={`Cost: ${comparison.cost.amountMinor.toLocaleString('en-US')} ${comparison.cost.currency} minor units`} /></label><label className="flex flex-col gap-1">Market value<progress className="h-3 w-full accent-primary" value={comparison.market.amountMinor} max={Math.max(comparison.cost.amountMinor, comparison.market.amountMinor, 1)} aria-label={`Market value: ${comparison.market.amountMinor.toLocaleString('en-US')} ${comparison.market.currency} minor units`} /></label></div><p><strong>Difference (market less cost): {comparison.differenceMinor.startsWith('-') ? '−' : comparison.differenceMinor === '0' ? '' : '+'}{BigInt(comparison.differenceMinor).toLocaleString('en-US').replace('-', '')} {comparison.cost.currency} minor units ({comparison.direction}).</strong></p></div>}
     </div>}
-  </section>
+  </section><EquityWarning valuations={valuations}/></>
+}
+function EquityWarning({ valuations }: { valuations: ComparableValuation[] }) {
+ const id=useId(),[baselineId,setBaselineId]=useState(''),[currentId,setCurrentId]=useState('')
+ const result=equityDipReview(valuations.find(v=>v.id===baselineId),valuations.find(v=>v.id===currentId))
+ const option=(v:ComparableValuation)=>`${v.valuationDate} · ${v.currency} ${v.amountMinor.toLocaleString('en-US')} minor units · ${v.basis} · ${v.source || 'No source recorded'}`
+ return <section className="mt-6 flex flex-col gap-3" aria-label="Equity decline review"><h4>Equity decline review</h4><p>For an equity investment, choose a positive earlier baseline and a later valuation. The current policy calls for review after a dip of 20% or more. The baseline and comparability are your choices; this does not infer an equity classification, notify the board, or establish a realized loss.</p>{valuations.length<2?<p>Record at least two dated observations to compare.</p>:<div className="grid max-w-2xl gap-3"><Field><FieldLabel htmlFor={`${id}-baseline`}>Earlier baseline valuation</FieldLabel><NativeSelect id={`${id}-baseline`} value={baselineId} onChange={e=>setBaselineId(e.target.value)}><NativeSelectOption value="">Select a baseline</NativeSelectOption>{valuations.map(v=><NativeSelectOption key={v.id} value={v.id}>{option(v)}</NativeSelectOption>)}</NativeSelect></Field><Field><FieldLabel htmlFor={`${id}-current`}>Later valuation</FieldLabel><NativeSelect id={`${id}-current`} value={currentId} onChange={e=>setCurrentId(e.target.value)}><NativeSelectOption value="">Select a later value</NativeSelectOption>{valuations.map(v=><NativeSelectOption key={v.id} value={v.id}>{option(v)}</NativeSelectOption>)}</NativeSelect></Field>{baselineId&&currentId&&!result&&<Alert variant="destructive"><AlertDescription>Select different observations for the same investment and currency, with a positive baseline dated before the later valuation, which must be on or after 28 September 2025 and no later than today in Kampala (based on this device’s clock).</AlertDescription></Alert>}{result&&<Alert><AlertDescription><strong>{result.reviewRequired?'20% decline threshold reached — review required':'20% decline threshold not reached in these observations'}.</strong> Decline: {BigInt(result.declineMinor).toLocaleString('en-US')} {result.baseline.currency} minor units ({BigInt(result.basisPoints)/100n}.{String(BigInt(result.basisPoints)%100n).padStart(2,'0')}%). Comparison uses exact amounts; the displayed percentage is rounded. Review sources, valuation basis, dates and omitted assets.</AlertDescription></Alert>}</div>}</section>
 }
 function InvestmentRegister() {
   const { investments, available } = Route.useLoaderData()
-  const router = useRouter(); const {userId}=Route.useRouteContext()
+  const router = useRouter(); const {userId}=Route.useLoaderData()
   const investmentPending=usePendingRequest<InvestmentRequest>(userId,'investment-create'), valuationPending=usePendingRequest<ValuationRequest>(userId,'investment-valuation'), transactionPending=usePendingRequest<TransactionRequest>(userId,'investment-transaction')
   const [name, setName] = useState(''); const [assetClass, setAssetClass] = useState(''); const [currency, setCurrency] = useState('UGX')
   const [investmentId, setInvestmentId] = useState(''); const [valuationDate, setValuationDate] = useState(''); const [amountMinor, setAmountMinor] = useState(''); const [basis, setBasis] = useState(''); const [source, setSource] = useState('')
@@ -71,7 +80,7 @@ function InvestmentRegister() {
           <Field><FieldLabel htmlFor="investment-name">Name</FieldLabel><Input id="investment-name" value={name} onChange={e => setName(e.target.value)} required maxLength={200} /></Field>
           <Field><FieldLabel htmlFor="investment-class">Asset class</FieldLabel><Input id="investment-class" value={assetClass} onChange={e => setAssetClass(e.target.value)} required maxLength={100} /></Field>
           <Field><FieldLabel htmlFor="investment-currency">Currency code</FieldLabel><Input id="investment-currency" value={currency} onChange={e => setCurrency(e.target.value.toUpperCase())} required pattern="[A-Z]{3}" maxLength={3} /></Field>
-          <Button disabled={busy || !investmentPending.ready || !!investmentPending.pending || !!investmentPending.storageError}>{busy ? 'Saving…' : 'Add investment'}</Button>
+          <Button disabled={busy || !investmentPending.ready || !!investmentPending.pending || !!investmentPending.storageError}>{busy ? <SpinnerLabel>Add investment</SpinnerLabel> : 'Add investment'}</Button>
         </FieldGroup></form>
       </CardContent></Card>
       <Card className="mt-8"><CardHeader><CardTitle role="heading" aria-level={2}>Record a valuation</CardTitle><CardDescription>Enter an observed value, its date and basis. Use whole minor units of the investment currency.</CardDescription></CardHeader><CardContent>
@@ -82,7 +91,7 @@ function InvestmentRegister() {
           <Field><FieldLabel htmlFor="valuation-amount">Amount in minor units</FieldLabel><Input id="valuation-amount" type="text" inputMode="numeric" pattern="[0-9]+" value={amountMinor} onChange={e => setAmountMinor(e.target.value)} required /></Field>
           <Field><FieldLabel htmlFor="valuation-basis">Valuation basis</FieldLabel><Input id="valuation-basis" value={basis} onChange={e => setBasis(e.target.value)} required maxLength={200} placeholder="For example, market value" /></Field>
           <Field><FieldLabel htmlFor="valuation-source">Source (optional)</FieldLabel><Input id="valuation-source" value={source} onChange={e => setSource(e.target.value)} maxLength={200} /></Field>
-          <Button disabled={busy || investments.length === 0 || !valuationPending.ready || !!valuationPending.pending || !!valuationPending.storageError}>{busy ? 'Saving…' : 'Record valuation'}</Button>
+          <Button disabled={busy || investments.length === 0 || !valuationPending.ready || !!valuationPending.pending || !!valuationPending.storageError}>{busy ? <SpinnerLabel>Record valuation</SpinnerLabel> : 'Record valuation'}</Button>
         </FieldGroup></form>
       </CardContent></Card>
       <Card className="mt-8"><CardHeader><CardTitle role="heading" aria-level={2}>Record investment income or transaction</CardTitle><CardDescription>Record an investment transaction from the source records. Recording it does not post to the accounts. Use the investment posting page to review and post it with approved accounts.</CardDescription></CardHeader><CardContent>
@@ -93,9 +102,9 @@ function InvestmentRegister() {
           <Field><FieldLabel htmlFor="transaction-date">Transaction date</FieldLabel><DatePickerInput id="transaction-date" type="date" value={transactionDate} onChange={e => setTransactionDate(e.target.value)} required /></Field>
           <Field><FieldLabel htmlFor="transaction-type">Transaction type</FieldLabel><Input id="transaction-type" value={transactionType} onChange={e => setTransactionType(e.target.value)} required maxLength={100} placeholder="For example, dividend or purchase" /></Field>
           <Field><FieldLabel htmlFor="transaction-amount">Amount in minor units</FieldLabel><Input id="transaction-amount" type="text" inputMode="numeric" pattern="[0-9]+" value={transactionAmount} onChange={e => setTransactionAmount(e.target.value)} required /></Field>
-          <Field><FieldLabel htmlFor="transaction-reference">Reference (optional)</FieldLabel><Input id="transaction-reference" value={transactionReference} onChange={e => setTransactionReference(e.target.value)} maxLength={200} /></Field>
+          {transactionType.trim().toLowerCase()==='purchase'&&<ApprovalGuidance currency={investments.find(i=>i.id===transactionInvestmentId)?.currency??''} amount={transactionAmount} date={transactionDate} kind="investment"/>}<Field><FieldLabel htmlFor="transaction-reference">Reference (optional)</FieldLabel><Input id="transaction-reference" value={transactionReference} onChange={e => setTransactionReference(e.target.value)} maxLength={200} /></Field>
           <Field><FieldLabel htmlFor="transaction-notes">Notes (optional)</FieldLabel><Textarea id="transaction-notes" value={transactionNotes} onChange={e => setTransactionNotes(e.target.value)} maxLength={2000} /></Field>
-          <Button disabled={busy || investments.length === 0 || !transactionPending.ready || !!transactionPending.pending || !!transactionPending.storageError}>{busy ? 'Saving…' : 'Record transaction'}</Button>
+          <Button disabled={busy || investments.length === 0 || !transactionPending.ready || !!transactionPending.pending || !!transactionPending.storageError}>{busy ? <SpinnerLabel>Record transaction</SpinnerLabel> : 'Record transaction'}</Button>
         </FieldGroup></form>
       </CardContent></Card>
       <section className="mt-11"><h2>Investments ({investments.length})</h2>{investments.length === 0 ? <p>No investments have been added yet.</p> : investments.map(item => <Card key={item.id} className="mt-8"><CardHeader><CardTitle role="heading" aria-level={3}>{item.name}</CardTitle><CardDescription>{item.assetClass} · {item.currency} · {item.status} · investment {item.id}{item.sourceRef ? ` · source reference ${item.sourceRef}` : ''}</CardDescription></CardHeader><CardContent>

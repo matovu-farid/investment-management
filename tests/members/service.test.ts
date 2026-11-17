@@ -6,7 +6,7 @@ function fixture(role: string | null) {
   const calls: string[] = []
   const repository: MemberRepository = {
     roleFor: async () => { calls.push('role'); return role },
-    list: async () => { calls.push('list'); return [] },
+    list: async () => { calls.push('list'); if (role !== 'admin') throw new Error('Unauthorized'); return [] },
     create: async (member) => { calls.push('create'); return member },
   }
   return { calls, repository }
@@ -17,7 +17,7 @@ test('unauthenticated and ungranted users cannot list or create', async () => {
     const { calls, repository } = fixture(null)
     await assert.rejects(listMembers(repository, actor), /unauthorized/i)
     await assert.rejects(createMember(repository, actor, { memberNumber: '1', fullName: 'Example' }), /unauthorized/i)
-    assert.equal(calls.includes('list'), false)
+    assert.equal(calls.includes('list'), actor !== null)
     assert.equal(calls.includes('create'), false)
   }
 })

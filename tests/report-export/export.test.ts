@@ -31,3 +31,9 @@ test('exports cash facts separately with exact amounts, void details and safe sp
   assert.ok(csv.includes('"\'=example"'))
   assert.ok(csv.includes('Correction'))
 })
+
+test('fulfilment report exports the linked loan identifier without implying disbursement',()=>{
+ const report={start:'2026-01-01',end:'2026-04-30',members:[],loans:[],repayments:[],bookings:[],bookingSnapshot:[],bookingSnapshotTotals:[],bookingStatusEvents:[],fulfilments:[{member:'M',bookingId:'b',loanId:'=loan',requestedDate:'2026-01-01',date:'2026-02-01',amountMinor:20,currency:'UGX',notes:null,voidedAt:null,voidReason:null}],investments:[],transactions:[],valuations:[],shareEvents:[],shareTrades:[]} satisfies Report
+ const csv=reportCsv(report)
+ assert.match(csv,/"Associated loan ID"/);assert.match(csv,/"'=loan"/);assert.match(csv,/recorded facts/)
+})

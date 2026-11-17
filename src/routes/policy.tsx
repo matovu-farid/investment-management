@@ -1,3 +1,6 @@
+import { SpinnerLabel } from '#/components/ui/spinner'
+import { DividendIllustration } from '#/components/dividend-illustration'
+import { PolicyCorrection } from '#/components/policy-correction'
 import { confirmAction } from '#/components/confirmation-host'
 import { DatePickerInput } from '#/components/ui/date-picker'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
@@ -10,18 +13,21 @@ import { Textarea } from '#/components/ui/textarea'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 import { getSession } from '#/lib/auth.functions'
+import { loadAuthenticated } from '#/lib/parallel-route-loading'
 import { addPolicyTargetFn, listPolicyTargetsFn } from '#/server/policy/functions'
 import {PendingRequestNotice,usePendingRequest} from '#/lib/pending-requests/use-pending'
 import { validatePolicyRange } from '#/lib/policy-range'
+import { PolicyReference } from '#/components/policy-reference'
+import { ApprovalTimeline } from '#/components/approval-timeline'
 
 export const Route=createFileRoute('/policy')({
- beforeLoad:async()=>{const session=await getSession();if(!session) throw redirect({to:'/login'});return {userId:session.user.id}},
- loader:async()=>{try{return {targets:await listPolicyTargetsFn(),available:true}}catch{return {targets:[],available:false}}},
+ beforeLoad:async()=>{if(!await getSession())throw redirect({to:'/login'})},
+ loader:async()=>{const {session,data}=await loadAuthenticated(getSession,async()=>{try{return {targets:await listPolicyTargetsFn(),available:true}}catch{return {targets:[],available:false}}},()=>{throw redirect({to:'/login'})});return {userId:session.user.id,...data}},
  component:PolicyPage,
 })
 type PolicyRequest={idempotencyKey:string;assetClass:string;effectiveDate:string;minBasisPoints:string;maxBasisPoints:string;targetBasisPoints:string;source:string;notes:string}
 function PolicyPage(){
- const {targets,available}=Route.useLoaderData(),router=useRouter(),{userId}=Route.useRouteContext()
+ const {targets,available,userId}=Route.useLoaderData(),router=useRouter()
  const pending=usePendingRequest<PolicyRequest>(userId,'policy-range')
  const [assetClass,setAssetClass]=useState(''),[date,setDate]=useState(''),[min,setMin]=useState(''),[max,setMax]=useState(''),[target,setTarget]=useState(''),[source,setSource]=useState(''),[notes,setNotes]=useState('')
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('')
@@ -31,7 +37,10 @@ function PolicyPage(){
  async function discardPending(){if(await confirmAction('This request may already have been recorded. Check the register before discarding it. Discard the pending request?')){try{pending.discard()}catch{setError('Could not discard the pending request in this tab.')}}}
  return <div className="app"><header><Link to="/" className="brand" style={{color:'inherit',textDecoration:'none'}}><span className="brand-mark">R</span><span>RNIG <small>INVESTMENT GROUP</small></span></Link><Link to="/" className="quiet" style={{textDecoration:'none'}}>Back to overview</Link></header><main className="dashboard"><p className="eyebrow">ADMINISTRATION</p><h1>Investment policy</h1><p className="lead">Record the approved allocation ranges and their source.</p>
  {!available?<Alert role="alert"><AlertDescription>This register is unavailable or you do not have permission to view it.</AlertDescription></Alert>:<>
- <Alert className="mt-6"><AlertDescription>These are policy records, not a compliance calculation. Confirm the current policy and allocation basis before interpreting them.</AlertDescription></Alert>
+ <Alert className="mt-6"><AlertDescription>These are policy records, not a compliance calculation. Review the allocation basis and supporting valuations before interpreting them.</AlertDescription></Alert>
+ <PolicyReference />
+ <ApprovalTimeline />
+ <DividendIllustration />
  {error&&<Alert variant="destructive" className="mt-4" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}{message&&<Alert className="mt-4" role="status"><AlertDescription>{message}</AlertDescription></Alert>}
  <Card className="mt-6"><CardHeader><CardTitle>Record a policy range</CardTitle><CardDescription>Enter the allocation range and the policy source or approval reference.</CardDescription></CardHeader><CardContent>
  <PendingRequestNotice title="Policy range" pending={pending.pending} storageError={pending.storageError} disabled={busy} onRetry={()=>{if(pending.pending)void send(pending.pending,false)}} onDiscard={discardPending}/>
@@ -43,8 +52,8 @@ function PolicyPage(){
  <Field><FieldLabel htmlFor="policy-target">Target allocation (%) (optional)</FieldLabel><Input id="policy-target" inputMode="decimal" pattern="[0-9]{1,3}([.][0-9]{1,2})?" value={target} onChange={e=>setTarget(e.target.value)}/></Field>
  <Field><FieldLabel htmlFor="policy-source">Source or approval reference</FieldLabel><Input id="policy-source" value={source} onChange={e=>setSource(e.target.value)} required maxLength={500}/></Field>
  <Field><FieldLabel htmlFor="policy-notes">Notes (optional)</FieldLabel><Textarea id="policy-notes" value={notes} onChange={e=>setNotes(e.target.value)} maxLength={2000}/></Field>
- <Field><Button disabled={busy||!pending.ready||!!pending.pending||!!pending.storageError}>{busy?'Saving…':'Record range'}</Button></Field>
+ <Field><Button disabled={busy||!pending.ready||!!pending.pending||!!pending.storageError}>{busy ? <SpinnerLabel>Record range</SpinnerLabel> : 'Record range'}</Button></Field>
  </FieldGroup></form></CardContent></Card>
- <Card className="mt-6"><CardHeader><CardTitle>Recorded policy ranges ({targets.length})</CardTitle><CardDescription>Ranges are shown with their effective dates and source records.</CardDescription></CardHeader><CardContent>{targets.length===0?<p>No policy ranges recorded yet.</p>:<Table><TableHeader><TableRow>{['Effective date','Asset class','Minimum','Maximum','Target','Source','Notes'].map(x=><TableHead key={x} scope="col">{x}</TableHead>)}</TableRow></TableHeader><TableBody>{targets.map(t=><TableRow key={t.id}>{[t.effectiveDate,t.assetClass,t.minBasisPoints===null?'—':`${(t.minBasisPoints/100).toFixed(2)}%`,t.maxBasisPoints===null?'—':`${(t.maxBasisPoints/100).toFixed(2)}%`,t.targetBasisPoints===null?'—':`${(t.targetBasisPoints/100).toFixed(2)}%`,t.source,t.notes||'—'].map((v,i)=><TableCell key={i}>{v}</TableCell>)}</TableRow>)}</TableBody></Table>}</CardContent></Card>
+ <Card className="mt-6"><CardHeader><CardTitle>Recorded policy ranges ({targets.length})</CardTitle><CardDescription>Ranges are shown with their effective dates and source records.</CardDescription></CardHeader><CardContent>{targets.length===0?<p>No policy ranges recorded yet.</p>:<Table><TableHeader><TableRow>{['Effective date','Asset class','Minimum','Maximum','Target','Source','Notes','Corrections'].map(x=><TableHead key={x} scope="col">{x}</TableHead>)}</TableRow></TableHeader><TableBody>{targets.map(t=><TableRow key={t.id}>{[t.effectiveDate,`${t.assetClass}${t.correctionId?' · corrected':''}`,t.minBasisPoints===null?'—':`${(t.minBasisPoints/100).toFixed(2)}%`,t.maxBasisPoints===null?'—':`${(t.maxBasisPoints/100).toFixed(2)}%`,t.targetBasisPoints===null?'—':`${(t.targetBasisPoints/100).toFixed(2)}%`,t.source,t.notes||'—'].map((v,i)=><TableCell key={i}>{v}</TableCell>)}<TableCell><PolicyCorrection key={`${t.id}:${t.correctionId??'original'}`} policy={t} userId={userId} onSaved={()=>router.invalidate()}/></TableCell></TableRow>)}</TableBody></Table>}</CardContent></Card>
  </>}</main></div>
 }

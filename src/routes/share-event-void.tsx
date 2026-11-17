@@ -1,3 +1,8 @@
+import { SpinnerLabel } from '#/components/ui/spinner'
+import { loadRouteInParallel } from '#/lib/parallel-route-loading'
+import { Button } from '#/components/ui/button'
+import { NativeSelect, NativeSelectOption } from '#/components/ui/native-select'
+import { Textarea } from '#/components/ui/textarea'
 import { Alert, AlertDescription } from '#/components/ui/alert'
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -8,13 +13,12 @@ import { voidShareEventFn } from '#/server/share-event-void/functions'
 import { listTradeReconciliationFn } from '#/server/trade-reconciliation/functions'
 
 export const Route = createFileRoute('/share-event-void')({
-  beforeLoad: async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { userId: session.user.id } },
-  loader: async () => { try { const [shares, reconciliation] = await Promise.all([listSharesFn(), listTradeReconciliationFn()]); return { shares, reconciliation } } catch { return null } },
+  beforeLoad: async () => { const { auth, data } = await loadRouteInParallel(async () => { const session = await getSession(); if (!session) throw redirect({ to: '/login' }); return { userId: session.user.id } }, async () => { try { const [shares, reconciliation] = await Promise.all([listSharesFn(), listTradeReconciliationFn()]); return { shares, reconciliation } } catch { return null } }); return { ...(auth ?? {}), __parallelData: data } },
+  loader: ({ context }) => context.__parallelData,
   component: ShareEventVoid,
 })
 
 type Request = { idempotencyKey: string; eventId: string; reason: string }
-const panel = { background: 'white', border: '1px solid #e2e9e2', borderRadius: 7, padding: 24, marginTop: 24 }
 
 function ShareEventVoid() {
   const data = Route.useLoaderData(), { userId } = Route.useRouteContext(), router = useRouter()
@@ -56,13 +60,13 @@ function ShareEventVoid() {
     {!data ? <Alert variant="destructive" role="alert"><AlertDescription>The share register is unavailable or access could not be confirmed.</AlertDescription></Alert> : <>
       {error && <Alert variant="destructive" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}{message && <p role="status">{message}</p>}
       <PendingRequestNotice title="Share event void" pending={pending.pending} storageError={pending.storageError} disabled={busy || refreshFailed} onRetry={() => { if (pending.pending) void send(pending.pending, false) }} onDiscard={() => setDiscardReview(true)} />
-      {discardReview && <section style={panel} aria-label="Confirm discarding request"><p>The request may already have been recorded. Check the void history before discarding it.</p><button type="button" disabled={busy} onClick={discard}>Discard request</button>{' '}<button type="button" disabled={busy} onClick={() => setDiscardReview(false)}>Keep request</button></section>}
-      <section style={panel}><h2>Review an event</h2>{review ? <div role="region" aria-label="Confirm share event void"><p><strong>{description(review.eventId)}</strong></p><p>Reason: {review.reason}</p><p>Confirm this event is erroneous. This cannot be undone.</p><button type="button" disabled={locked} onClick={() => void send(review, true)}>{busy ? 'Saving…' : 'Confirm void'}</button>{' '}<button type="button" disabled={busy} onClick={() => setReview(null)}>Edit</button></div> : <form onSubmit={prepare} style={{ display: 'grid', gap: 12, maxWidth: 680 }}>
-        <label>Event <select required value={eventId} disabled={locked} onChange={e => setEventId(e.target.value)}><option value="">Select a recorded share event</option>{events.filter(e => !e.voidedAt).map(e => <option key={e.id} value={e.id}>{description(e.id)}</option>)}</select></label>
+      {discardReview && <section className="record-panel" aria-label="Confirm discarding request"><p>The request may already have been recorded. Check the void history before discarding it.</p><Button type="button" disabled={busy} onClick={discard}>Discard request</Button>{' '}<Button type="button" disabled={busy} onClick={() => setDiscardReview(false)}>Keep request</Button></section>}
+      <section className="record-panel"><h2>Review an event</h2>{review ? <div role="region" aria-label="Confirm share event void"><p><strong>{description(review.eventId)}</strong></p><p>Reason: {review.reason}</p><p>Confirm this event is erroneous. This cannot be undone.</p><Button type="button" disabled={locked} onClick={() => void send(review, true)}>{busy ? <SpinnerLabel>Confirm void</SpinnerLabel> : 'Confirm void'}</Button>{' '}<Button type="button" disabled={busy} onClick={() => setReview(null)}>Edit</Button></div> : <form onSubmit={prepare} style={{ display: 'grid', gap: 12, maxWidth: 680 }}>
+        <label>Event <NativeSelect required value={eventId} disabled={locked} onChange={e => setEventId(e.target.value)}><NativeSelectOption value="">Select a recorded share event</NativeSelectOption>{events.filter(e => !e.voidedAt).map(e => <NativeSelectOption key={e.id} value={e.id}>{description(e.id)}</NativeSelectOption>)}</NativeSelect></label>
         {activeReconciliation && <Alert variant="destructive" role="alert"><AlertDescription>This event is linked to a trade. <Link to="/trade-reconciliation">Revoke the active reconciliation</Link> before voiding it, then reload this page.</AlertDescription></Alert>}
-        <label>Reason <textarea required maxLength={450} value={reason} disabled={locked} onChange={e => setReason(e.target.value)} /></label><button disabled={locked || !eventId || !!activeReconciliation}>Review void</button>
+        <label>Reason <Textarea required maxLength={450} value={reason} disabled={locked} onChange={e => setReason(e.target.value)} /></label><Button disabled={locked || !eventId || !!activeReconciliation}>Review void</Button>
       </form>}</section>
-      <section style={panel}><h2>Voided events</h2>{!events.some(e => e.voidedAt) ? <p>No share events have been voided.</p> : <ul>{events.filter(e => e.voidedAt).map(e => <li key={e.id}>{description(e.id)} · voided {e.voidedAt} UTC · {e.voidReason}</li>)}</ul>}</section>
+      <section className="record-panel"><h2>Voided events</h2>{!events.some(e => e.voidedAt) ? <p>No share events have been voided.</p> : <ul>{events.filter(e => e.voidedAt).map(e => <li key={e.id}>{description(e.id)} · voided {e.voidedAt} UTC · {e.voidReason}</li>)}</ul>}</section>
     </>}
   </main></div>
 }

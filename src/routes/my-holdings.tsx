@@ -1,3 +1,4 @@
+import { loadRouteInParallel } from '#/lib/parallel-route-loading'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { getSession } from '#/lib/auth.functions'
 import { memberHoldingObservationsFn } from '#/server/holding-observations/functions'
@@ -8,8 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 
 export const Route = createFileRoute('/my-holdings')({
-  beforeLoad: async () => { if (!await getSession()) throw redirect({ to: '/login' }) },
-  loader: async () => memberHoldingObservationsFn().catch(() => null),
+  beforeLoad: async () => { const { auth, data } = await loadRouteInParallel(async () => { if (!await getSession()) throw redirect({ to: '/login' }) }, async () => memberHoldingObservationsFn().catch(() => null)); return { ...(auth ?? {}), __parallelData: data } },
+  loader: ({ context }) => context.__parallelData,
   component: MyHoldings,
 })
 

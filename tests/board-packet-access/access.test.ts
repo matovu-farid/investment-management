@@ -37,3 +37,27 @@ test('grant refuses stale reviewed identity and unchanged retries survive later 
  const {sql,db}=setup();sql.exec("UPDATE members SET full_name='New name' WHERE id='m'");await assert.rejects(grantBoardPacketAccess(db,'a',grant),/unavailable/i);assert.equal(sql.prepare('SELECT count(*) n FROM board_packet_access_grants').get()!.n,0)
  const reviewed={...grant,expectedMemberName:'New name'};const saved=await grantBoardPacketAccess(db,'a',reviewed);sql.exec("UPDATE members SET full_name='Changed again' WHERE id='m'; UPDATE \"user\" SET email='new@example.test' WHERE id='u'");assert.deepEqual(await grantBoardPacketAccess(db,'a',reviewed),saved);await assert.rejects(grantBoardPacketAccess(db,'a',{...reviewed,expectedEmail:'new@example.test'}),/reused/i);assert.equal((await listBoardPacketAccess(db,'a')).grants[0].email,'user@example.test');sql.close()
 })
+
+test('summary grant sends only a frozen allowlisted projection and rejects stale review or mode reuse',async()=>{
+ const {boardPacketSummary,summaryCsv}=await import('../../src/lib/board-packet-summary.ts')
+ const {sql,db}=setup()
+ const data={start:'2026-01-01',end:'2026-04-30',activity:{secret:'topsecret-activity'},lending:{data:{csv:'topsecret-csv',loans:[{memberName:'topsecret-member'}]}},sales:{notes:'topsecret-sale'},calculatedLending:{capturedFrom:'2026-05-01 12:00:00',capturedTo:'2026-05-01 12:00:01',data:{asOf:'2026-04-30',eligible:2,included:1,omitted:{unconfigured:1,pendingRepayments:0,unavailable:0},totals:[{currency:'UGX',principalMinor:'500',interestMinor:'3',secret:'topsecret-total'}],secret:'topsecret-data'}}}
+ sql.prepare("INSERT INTO board_packet_previews(id,created_by,packet) VALUES('summary-preview','a',?)").run(JSON.stringify(data));sql.exec("INSERT INTO board_packets(id,preview_id,request_key,created_by) VALUES('summary-packet','summary-preview','summary-save','a')")
+ const expectedSummary=boardPacketSummary(data),request={...grant,packetId:'summary-packet',shareMode:'summary',expectedSummary}
+ assert.throws(()=>sql.prepare("INSERT INTO board_packet_access_grants(id,packet_id,user_id,link_id,member_id,reviewed_member_name,reviewed_member_number,reviewed_email,request_key,granted_by,share_mode,summary_json) VALUES('malicious','summary-packet','x','z','n','Other','002','other@example.test','malicious','a','summary',?)").run(JSON.stringify({...expectedSummary,secret:'topsecret-csv'})),/projection/i)
+ await assert.rejects(grantBoardPacketAccess(db,'a',{...request,expectedSummary:{...expectedSummary,end:'2026-04-29'}}))
+ const g=await grantBoardPacketAccess(db,'a',request);assert.equal(g.active,true);assert.deepEqual(await grantBoardPacketAccess(db,'a',request),g)
+ await assert.rejects(grantBoardPacketAccess(db,'a',{...request,shareMode:'full'}),/reused/i)
+ const response=await listMyBoardPackets(db,'u');assert.equal(response.length,1);assert.equal(response[0].shareMode,'summary');assert.deepEqual(response[0].packet,expectedSummary)
+ assert.doesNotMatch(JSON.stringify(response),/topsecret/);assert.doesNotMatch(summaryCsv(expectedSummary),/topsecret/);assert.match(summaryCsv(expectedSummary),/Small groups may reveal individual balances/);assert.match(summaryCsv(expectedSummary),/accrued but unposted interest/);assert.match(summaryCsv(expectedSummary),/2026-05-01 12:00:01/);assert.deepEqual(await listMyBoardPackets(db,'x'),[])
+ assert.throws(()=>sql.exec("UPDATE board_packet_access_grants SET summary_json='{}'"),/immutable/i)
+ await revokeBoardPacketAccess(db,'a',{grantId:g.id,requestKey:k2});assert.deepEqual(await listMyBoardPackets(db,'u'),[]);sql.close()
+})
+
+test('summary grant rejects a recipient link or identity change between review and write',async()=>{
+ const {boardPacketSummary}=await import('../../src/lib/board-packet-summary.ts');for(const stale of ['link','identity']){const {sql,db}=setup()
+ const data={start:'2026-01-01',end:'2026-04-30',calculatedLending:{capturedFrom:'2026-05-01 12:00:00',capturedTo:'2026-05-01 12:00:01',data:{asOf:'2026-04-30',eligible:0,included:0,omitted:{unconfigured:0,pendingRepayments:0,unavailable:0},totals:[]}}}
+ sql.prepare("INSERT INTO board_packet_previews(id,created_by,packet) VALUES('summary-preview','a',?)").run(JSON.stringify(data));sql.exec("INSERT INTO board_packets(id,preview_id,request_key,created_by) VALUES('summary-packet','summary-preview','summary-save','a')")
+ const race={prepare(query:string){const statement=db.prepare(query);if(!query.startsWith('INSERT INTO board_packet_access_grants'))return statement;const bind=statement.bind.bind(statement);statement.bind=(...args:unknown[])=>{const bound=bind(...args),run=bound.run.bind(bound);bound.run=async()=>{if(stale==='link')sql.exec("UPDATE member_user_links SET revoked_at=CURRENT_TIMESTAMP,revoked_by='a',revoke_request_key='race' WHERE id='l'");else sql.exec("UPDATE \"user\" SET email='changed@example.test' WHERE id='u'");return run()};return bound};return statement},batch:db.batch.bind(db)} as D1Database
+ await assert.rejects(grantBoardPacketAccess(race,'a',{...grant,packetId:'summary-packet',shareMode:'summary',expectedSummary:boardPacketSummary(data)}));assert.equal(sql.prepare('SELECT count(*) n FROM board_packet_access_grants').get()!.n,0);sql.close()}
+})

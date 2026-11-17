@@ -5,6 +5,7 @@
   body.board-packet-printing { margin: 0; background: white; color: black; }
   body.board-packet-printing > .board-packet-print-copy { display: block; width: 100%; color: black; }
   .board-packet-print-copy .board-packet-print-heading { display: block; }
+  .board-packet-print-copy .board-packet-scroll-hint { display: none; }
   .board-packet-print-copy button:not([data-slot="accordion-trigger"]) { display: none !important; }
   .board-packet-print-copy [data-slot="accordion-trigger"] { display: block; padding: .5rem 0; font-size: 1rem; font-weight: 700; }
   .board-packet-print-copy [data-slot="accordion-trigger"] svg { display: none; }

@@ -6,23 +6,57 @@ import { listLoanPosting, postLoanDisbursement, reverseLoanDisbursement } from '
 
 function fixture(withGuard=true) {
  const db=new DatabaseSync(':memory:'); db.exec('PRAGMA foreign_keys=ON')
- for(const f of ['0001_auth.sql','0001_ledger.sql','0002_domain.sql','0003_roles.sql','0012_reversal_chronology.sql','0017_loan_posting.sql',...(withGuard?['0032_disbursement_review_guard.sql']:[])]) db.exec(readFileSync(`migrations/${f}`,'utf8'))
- db.exec("CREATE TABLE loan_source_voids(source_kind TEXT,source_id TEXT,reason TEXT,created_at TEXT)")
+ for(const f of ['0001_auth.sql','0001_ledger.sql','0002_domain.sql','0003_roles.sql','0012_reversal_chronology.sql','0017_loan_posting.sql',...(withGuard?['0032_disbursement_review_guard.sql']:[]),'0100_loan_dispatch_declarations.sql']) db.exec(readFileSync(`migrations/${f}`,'utf8'))
+ db.exec("CREATE TABLE loan_source_voids(source_kind TEXT,source_id TEXT,reason TEXT,created_at TEXT); CREATE TABLE loan_openings(loan_id TEXT PRIMARY KEY,journal_id TEXT,opening_date TEXT,principal_minor INTEGER)")
  db.exec(`INSERT INTO "user"(id,name,email,createdAt,updatedAt) VALUES('u','Admin','admin@example.test',1,1),('other','Member','other@example.test',1,1);
  INSERT INTO app_user_roles(user_id,role,granted_by) VALUES('u','admin','bootstrap');
  INSERT INTO members(id,member_number,full_name,created_by) VALUES('m','1','Member','u');
  INSERT INTO loans(id,member_id,principal_minor,currency,disbursement_date,terms,created_by) VALUES('loan1','m',10000,'UGX','2026-01-01','Recorded terms','u');
  INSERT INTO ledger_accounts(id,code,name,currency) VALUES('cash','100','Cash','UGX'),('recv','200','Receivable','UGX'),('usd','300','USD cash','USD');`)
  type Statement={query:string;values:unknown[];bind:(...v:unknown[])=>Statement;first:()=>Promise<unknown>;all:()=>Promise<{results:unknown[]}>}
- const adapter={prepare(query:string):Statement{return {query,values:[],bind(...v){this.values=v;return this},async first(){return db.prepare(this.query).get(...this.values as never[])??null},async all(){return {results:db.prepare(this.query).all(...this.values as never[])}}}},async batch(statements:Statement[]){db.exec('BEGIN');try{const results=statements.map(s=>{const statement=db.prepare(s.query);return {results:statement.columns().length?statement.all(...s.values as never[]):(statement.run(...s.values as never[]),[])}});db.exec('COMMIT');return results}catch(e){db.exec('ROLLBACK');throw e}}} as unknown as D1Database
- return {db,adapter}
+ let revokeAt='';const adapter={prepare(query:string):Statement{return {query,values:[],bind(...v){this.values=v;return this},async first(){if(revokeAt&&this.query.startsWith(revokeAt)){revokeAt='';db.exec("DELETE FROM app_user_roles WHERE user_id='u'")}return db.prepare(this.query).get(...this.values as never[])??null},async all(){return {results:db.prepare(this.query).all(...this.values as never[])}}}},async batch(statements:Statement[]){db.exec('BEGIN');try{const results=statements.map(s=>{const statement=db.prepare(s.query);return {results:statement.columns().length?statement.all(...s.values as never[]):(statement.run(...s.values as never[]),[])}});db.exec('COMMIT');return results}catch(e){db.exec('ROLLBACK');throw e}}} as unknown as D1Database
+ return {db,adapter,revokeOn:(q:string)=>{revokeAt=q}}
 }
-const selection={loanId:'loan1',receivableAccountId:'recv',cashAccountId:'cash',expectedPrincipalMinor:10000,expectedCurrency:'UGX',expectedDate:'2026-01-01',expectedMemberId:'m'}
+const selection={loanId:'loan1',receivableAccountId:'recv',cashAccountId:'cash',expectedPrincipalMinor:10000,expectedCurrency:'UGX',expectedDate:'2026-01-01',expectedMemberId:'m',dispatchRoute:'equity'}
+test('current-protocol disbursement requires a declared non-cash route before posting',async()=>{
+ const {db,adapter}=fixture()
+ await assert.rejects(postLoanDisbursement(adapter,'u',{...selection,dispatchRoute:undefined}),/route/i)
+ await assert.rejects(postLoanDisbursement(adapter,'u',{...selection,dispatchRoute:'cash'}),/cash/i)
+ assert.equal((db.prepare('SELECT count(*) n FROM journal_entries').get() as {n:number}).n,0)
+ db.exec("UPDATE loans SET disbursement_date='2025-09-28' WHERE id='loan1'")
+ await assert.rejects(postLoanDisbursement(adapter,'u',{...selection,expectedDate:'2025-09-28',dispatchRoute:'cash'}),/cash/i)
+ db.close()
+})
+test('historical route can be unknown or cash without claiming the current policy applied',async()=>{
+ for(const route of ['cash','historical-unknown']){
+  const {db,adapter}=fixture()
+  db.exec("UPDATE loans SET disbursement_date='2025-09-27' WHERE id='loan1'")
+  const posted=await postLoanDisbursement(adapter,'u',{...selection,expectedDate:'2025-09-27',dispatchRoute:route})
+  assert.equal((db.prepare('SELECT route FROM loan_dispatch_declarations WHERE journal_id=?').get(posted.id) as {route:string}).route,route)
+  db.close()
+ }
+})
 test('posts recorded principal once and returns the same journal on retry',async()=>{
  const {db,adapter}=fixture(); const first=await postLoanDisbursement(adapter,'u',selection);const retry=await postLoanDisbursement(adapter,'u',selection)
  assert.equal(first.id,retry.id)
+ assert.equal((db.prepare('SELECT route FROM loan_dispatch_declarations WHERE journal_id=?').get(first.id) as {route:string}).route,'equity')
+ await assert.rejects(postLoanDisbursement(adapter,'u',{...selection,dispatchRoute:'other-bank'}),/route/i)
+ assert.throws(()=>db.exec("UPDATE loan_dispatch_declarations SET route='other-bank'"),/immutable/i)
  assert.deepEqual(db.prepare('SELECT side,account_id,amount_minor FROM journal_lines ORDER BY side').all().map(x=>({...x})),[{side:'credit',account_id:'cash',amount_minor:10000},{side:'debit',account_id:'recv',amount_minor:10000}])
  assert.equal((db.prepare('SELECT count(*) n FROM journal_entries').get() as {n:number}).n,1);db.close()
+})
+test('a concurrent different route cannot be reported as an identical retry',async()=>{
+ const {db,adapter}=fixture()
+ let injected=false
+ const racing={prepare:adapter.prepare.bind(adapter),async batch(statements:D1PreparedStatement[]){
+  if(!injected){injected=true;await postLoanDisbursement(adapter,'u',{...selection,dispatchRoute:'other-bank'})}
+  return adapter.batch(statements)
+ }} as D1Database
+ await assert.rejects(postLoanDisbursement(racing,'u',selection),/route/i)
+ const entries=db.prepare("SELECT id FROM journal_entries WHERE source_type='loan-disbursement' AND status='posted'").all() as {id:string}[]
+ assert.equal(entries.length,1)
+ assert.equal((db.prepare('SELECT route FROM loan_dispatch_declarations WHERE journal_id=?').get(entries[0].id) as {route:string}).route,'other-bank')
+ db.close()
 })
 test('rejects unauthorized, nonexistent, same account, wrong currency and changed retry without partial posting',async()=>{
  const {db,adapter}=fixture();await assert.rejects(postLoanDisbursement(adapter,'other',selection),/unauthorized/i)
@@ -80,6 +114,7 @@ test('lists original journal lines needed to review an exact loan reversal',asyn
  const {db,adapter}=fixture();const posted=await postLoanDisbursement(adapter,'u',selection)
  const result=await listLoanPosting(adapter,'u')
  assert.equal(result.loans[0].journalId,posted.id)
+ assert.equal(result.loans[0].dispatchRoute,'equity')
  assert.deepEqual(result.journalLines.filter(line=>line.entryId===posted.id).map(line=>({side:line.side,code:line.accountCode,amount:line.amountMinor})).sort((a,b)=>a.side.localeCompare(b.side)),[{side:'credit',code:'100',amount:10000},{side:'debit',code:'200',amount:10000}])
  await assert.rejects(listLoanPosting(adapter,'other'),/unauthorized/i)
  db.close()
@@ -122,6 +157,8 @@ test('database rechecks administrator permission at disbursement posting',async(
  const racing={prepare:adapter.prepare.bind(adapter),async batch(stmts:unknown[]){db.exec("DELETE FROM app_user_roles WHERE user_id='u'");return adapter.batch(stmts as D1PreparedStatement[])}} as unknown as D1Database
  await assert.rejects(postLoanDisbursement(racing,'u',selection),/unauthorized/i)
  assert.equal((db.prepare("SELECT count(*) AS n FROM journal_entries WHERE status='posted'").get() as {n:number}).n,0)
+ assert.equal((db.prepare('SELECT count(*) AS n FROM journal_entries').get() as {n:number}).n,0)
+ assert.equal((db.prepare('SELECT count(*) AS n FROM loan_dispatch_declarations').get() as {n:number}).n,0)
  db.close()
 })
 
@@ -132,7 +169,8 @@ test('legacy posted disbursement remains retryable after the new guard migration
  INSERT INTO journal_lines(id,entry_id,account_id,side,amount_minor) VALUES('ld','legacy','recv','debit',10000),('lc','legacy','cash','credit',10000);
  UPDATE journal_entries SET status='posted' WHERE id='legacy';`)
  db.exec(readFileSync('migrations/0032_disbursement_review_guard.sql','utf8'))
- const result=await postLoanDisbursement(adapter,'u',selection);assert.equal(result.id,'legacy')
+ const result=await postLoanDisbursement(adapter,'u',{...selection,dispatchRoute:undefined});assert.equal(result.id,'legacy')
+ assert.equal((await listLoanPosting(adapter,'u')).loans[0].dispatchRoute,null)
  assert.equal((db.prepare("SELECT count(*) AS n FROM journal_entries WHERE status='posted'").get() as {n:number}).n,1)
  db.close()
 })
@@ -150,3 +188,23 @@ test('does not disclose loan posting data when admin access is revoked before th
  await assert.rejects(listLoanPosting(racing,'u'),/unauthorized/i)
  db.close()
 })
+
+
+test('brought-forward opening appears in status and cannot be posted as a disbursement',async()=>{
+ const {db,adapter}=fixture()
+ db.exec("INSERT INTO loan_openings VALUES('loan1','opening-journal','2026-02-01',5000)")
+ const loan=(await listLoanPosting(adapter,'u')).loans[0]
+ assert.equal(loan.openingJournalId,'opening-journal')
+ assert.equal(loan.openingDate,'2026-02-01')
+ assert.equal(loan.journalId,null)
+ await assert.rejects(listLoanPosting(adapter,'other'),/unauthorized/i)
+ await assert.rejects(postLoanDisbursement(adapter,'u',selection),/brought-forward opening/i)
+ assert.equal((db.prepare('SELECT count(*) n FROM journal_entries').get() as {n:number}).n,0)
+ // The audited opening-correction workflow removes the active opening.
+ db.exec("DELETE FROM loan_openings WHERE loan_id='loan1'")
+ assert.equal((await listLoanPosting(adapter,'u')).loans[0].openingJournalId,null)
+ assert.equal((await postLoanDisbursement(adapter,'u',selection)).active,true)
+ db.close()
+})
+
+test('journal retry withholds final state after administrator revocation',async()=>{const {db,adapter,revokeOn}=fixture();const first=await postLoanDisbursement(adapter,'u',selection);revokeOn('SELECT (SELECT created_at FROM loan_source_voids');await assert.rejects(postLoanDisbursement(adapter,'u',selection));db.exec("INSERT INTO app_user_roles(user_id,role,granted_by) VALUES('u','admin','bootstrap')");assert.equal((await postLoanDisbursement(adapter,'u',selection)).id,first.id);db.close()})

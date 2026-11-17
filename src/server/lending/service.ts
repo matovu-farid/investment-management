@@ -1,13 +1,13 @@
 export type Loan = { id: string; memberId: string; principalMinor: number; currency: string; disbursementDate: string; maturityDate: string | null; terms: string; createdBy: string; memberName?: string; voidedAt?: string | null; voidReason?: string | null }
 export type Booking = { id: string; memberId: string; requestedMinor: number; currency: string; requestedDate: string; status: 'waiting' | 'held' | 'closed' | 'cancelled'; createdBy: string; memberName?: string; fulfilledMinor?: number; sourceRef?: string | null; notes?: string | null }
-export type Fulfilment = { id: string; bookingId: string; amountMinor: number; fulfilmentDate: string; createdBy: string; bookingSourceRef?: string | null; sourceRef?: string | null; voidedAt?: string | null; voidReason?: string | null }
+export type Fulfilment = { id: string; bookingId: string; loanId?: string | null; amountMinor: number; fulfilmentDate: string; createdBy: string; bookingSourceRef?: string | null; sourceRef?: string | null; voidedAt?: string | null; voidReason?: string | null }
 export type Repayment = { id: string; loanId: string; paymentDate: string; amountMinor: number; reference: string | null; notes: string | null; createdBy: string; voidedAt?: string | null; voidReason?: string | null }
 export interface LendingRepository {
   roleFor(userId: string): Promise<string | null>
   memberIsActive(id: string): Promise<boolean>
   loanDate(id: string): Promise<string | null>
   bookingDate(id: string): Promise<string | null>
-  list(): Promise<{ loans: Loan[]; bookings: Booking[]; fulfilments: Fulfilment[]; repayments: Repayment[] }>
+  list(actor: string): Promise<{ loans: Loan[]; bookings: Booking[]; fulfilments: Fulfilment[]; repayments: Repayment[] }>
   createLoan(loan: Loan, idempotencyKey: string): Promise<Loan>
   createBooking(booking: Booking, idempotencyKey: string): Promise<Booking>
   createRepayment(repayment: Repayment, idempotencyKey: string): Promise<Repayment>
@@ -49,8 +49,8 @@ async function activeMember(repo: LendingRepository, value: unknown): Promise<st
   return id
 }
 export async function listLending(repo: LendingRepository, actor: string | null) {
-  await authorize(repo, actor)
-  return repo.list()
+  const user = await authorize(repo, actor)
+  return repo.list(user)
 }
 export async function createLoan(repo: LendingRepository, actor: string | null, input: unknown): Promise<Loan> {
   const createdBy = await authorize(repo, actor)
@@ -80,7 +80,7 @@ export async function createFulfilment(repo: LendingRepository, actor: string | 
   const bookingId = required(v.bookingId, 100), fulfilmentDate = date(v.fulfilmentDate)
   const requestedDate = await repo.bookingDate(bookingId)
   if (!requestedDate || fulfilmentDate < requestedDate) throw new Error('Invalid fulfilment date or booking')
-  return repo.createFulfilment({ id: crypto.randomUUID(), bookingId, amountMinor: amount(v.amountMinor), fulfilmentDate, createdBy }, key)
+  return repo.createFulfilment({ id: crypto.randomUUID(), bookingId, loanId: optional(v.loanId, 100), amountMinor: amount(v.amountMinor), fulfilmentDate, createdBy }, key)
 }
 
 function optional(value: unknown, max: number): string | null {

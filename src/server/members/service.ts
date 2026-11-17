@@ -10,7 +10,8 @@ export type Member = {
 
 export interface MemberRepository {
   roleFor(userId: string): Promise<string | null>
-  list(): Promise<Member[]>
+  /** Must verify current admin authority in the same batch as the guarded read. */
+  list(actorId: string): Promise<Member[]>
   create(member: Member): Promise<Member>
 }
 
@@ -33,8 +34,8 @@ function parseInput(input: unknown): { memberNumber: string; fullName: string; e
 }
 
 export async function listMembers(repository: MemberRepository, actorId: string | null): Promise<Member[]> {
-  await requireAdmin(repository, actorId)
-  return repository.list()
+  if (!actorId) throw new Error('Unauthorized')
+  return repository.list(actorId)
 }
 
 export async function createMember(repository: MemberRepository, actorId: string | null, input: unknown): Promise<Member> {
